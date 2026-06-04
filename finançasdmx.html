@@ -113,8 +113,8 @@
       const [txForm, setTxForm] = useState({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: new Date().toISOString().slice(0, 10) });
       const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '', current: '0' });
       const [budgetForm, setBudgetForm] = useState({ category: 'Alimentação', limit: '' });
-      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Outros', dayOfMonth: 1 });
-      const [instForm, setInstForm] = useState({ id: null, desc: '', totalValue: '', currentInstallment: 1, totalInstallments: 2, dayOfMonth: 1, category: 'Outros' });
+      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
+      const [instForm, setInstForm] = useState({ id: null, desc: '', totalValue: '', currentInstallment: 1, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
 
       // --- Persistência ---
       useEffect(() => {
@@ -191,7 +191,7 @@
           const alreadyBilled = transactions.some(t => t.id === autoTxId);
           
           if (!alreadyBilled && currentDay >= targetDay) {
-            newTxs.push({ id: autoTxId, desc: sub.desc, value: parseFloat(sub.value), type: 'expense', category: sub.category || 'Outros', date: `${currentMonthStr}-${String(targetDay).padStart(2, '0')}`, autoType: 'subscription' });
+            newTxs.push({ id: autoTxId, desc: sub.desc, value: parseFloat(sub.value), type: 'expense', category: sub.category || 'Assinaturas', date: `${currentMonthStr}-${String(targetDay).padStart(2, '0')}`, autoType: 'subscription' });
             subsUpdated = true;
           }
           return sub;
@@ -207,7 +207,7 @@
 
           if (!alreadyBilled && currentDay >= targetDay) {
             const parcelValue = parseFloat(inst.totalValue) / parseInt(inst.totalInstallments);
-            newTxs.push({ id: autoTxId, desc: `${inst.desc} (${inst.currentInstallment}/${inst.totalInstallments})`, value: parcelValue, type: 'expense', category: inst.category || 'Outros', date: `${currentMonthStr}-${String(targetDay).padStart(2, '0')}`, autoType: 'installment' });
+            newTxs.push({ id: autoTxId, desc: `${inst.desc} (${inst.currentInstallment}/${inst.totalInstallments})`, value: parcelValue, type: 'expense', category: inst.category || 'Dívidas', date: `${currentMonthStr}-${String(targetDay).padStart(2, '0')}`, autoType: 'installment' });
             
             instsUpdated = true;
             return { ...inst, currentInstallment: inst.currentInstallment + 1, active: inst.currentInstallment < inst.totalInstallments };
@@ -249,13 +249,65 @@
           setSubscriptions(prev => mergeArrays(prev, data.subscriptions));
           setInstallments(prev => mergeArrays(prev, data.installments));
           if(data.budgets) setBudgets(prev => ({...prev, ...data.budgets}));
-          if(data.settings?.salary && data.settings.salary > (settings.salary || 0)) setSettings(data.settings); // Assume o maior salário se houver conflito simples
+          if(data.settings?.salary && data.settings.salary > (settings.salary || 0)) setSettings(data.settings); 
 
           showToast("Dados sincronizados com sucesso! 🚀");
           setSyncCodeInput('');
         } catch (e) {
           showToast("Código inválido ou corrompido.", true);
         }
+      };
+
+      // --- Funções de CSV ---
+      const handleExportCSV = () => {
+        let csv = "Data,Tipo,Categoria,Descrição,Valor\n";
+        transactions.forEach(t => {
+          csv += `${t.date},${t.type},${t.category},"${t.desc}",${t.value}\n`;
+        });
+        const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+        link.setAttribute("href", url);
+        link.setAttribute("download", "financas_dmx.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        showToast("Arquivo CSV exportado com sucesso.");
+      };
+
+      const handleImportCSV = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const lines = evt.target.result.split(/\r?\n/);
+          let added = 0;
+          const newTxs = [];
+          for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const [date, type, category, desc, value] = lines[i].split(',');
+            if (date && value && !isNaN(parseFloat(value))) {
+              newTxs.push({
+                id: generateId(),
+                date: date.trim(),
+                type: type.trim(),
+                category: category.trim(),
+                desc: desc.replace(/"/g, '').trim(),
+                value: parseFloat(value)
+              });
+              added++;
+            }
+          }
+          if(added > 0) {
+            setTransactions(prev => [...newTxs, ...prev]);
+            showToast(`${added} transações importadas!`);
+          } else {
+            showToast("Nenhuma transação válida encontrada.", true);
+          }
+        };
+        reader.readAsText(file);
+        e.target.value = '';
       };
 
 
@@ -283,7 +335,7 @@
         } else {
           setSubscriptions(prev => [...prev, { ...subForm, id: generateId(), value: val, dayOfMonth: day, active: true }]);
         }
-        setSubForm({ id: null, desc: '', value: '', category: 'Outros', dayOfMonth: 1 });
+        setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
         showToast("Assinatura salva.");
       };
 
@@ -302,8 +354,23 @@
         } else {
           setInstallments(prev => [...prev, { ...instForm, id: generateId(), totalValue: totalVal, totalInstallments: totalInst, currentInstallment: curInst, dayOfMonth: day, active: curInst <= totalInst }]);
         }
-        setInstForm({ id: null, desc: '', totalValue: '', currentInstallment: 1, totalInstallments: 2, dayOfMonth: 1, category: 'Outros' });
+        setInstForm({ id: null, desc: '', totalValue: '', currentInstallment: 1, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
         showToast("Parcelamento salvo.");
+      };
+
+      const handleAddGoal = () => {
+        const target = parseFloat(goalForm.target);
+        const current = parseFloat(goalForm.current) || 0;
+        if (!goalForm.name.trim() || isNaN(target) || target <= 0) return showToast("Nome e valor alvo válidos são obrigatórios.", true);
+
+        if (goalForm.id) {
+          setGoals(prev => prev.map(g => g.id === goalForm.id ? { ...goalForm, target, current } : g));
+          showToast("Meta atualizada.");
+        } else {
+          setGoals(prev => [...prev, { ...goalForm, id: generateId(), target, current }]);
+          showToast("Meta criada.");
+        }
+        setGoalForm({ id: null, name: '', target: '', current: '0' });
       };
 
       const handleSaveSalary = (e) => {
@@ -311,11 +378,15 @@
         setSettings({ ...settings, salary: val });
       };
 
-      const predefinedCategories = ['Alimentação','Transporte','Lazer','Saúde','Habitação','Educação','Outros'];
+      const predefinedCategories = [
+        'Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Habitação', 'Educação',
+        'Vestuário', 'Pets', 'Assinaturas', 'Dívidas', 'Investimentos', 
+        'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'
+      ];
 
       // Gráfico Donut Dinâmico
       const DonutChart = () => {
-        const colors = ['#0ea5e9', '#8b5cf6', '#10b981', '#f43f5e', '#f59e0b', '#06b6d4', '#64748b'];
+        const colors = ['#0ea5e9', '#8b5cf6', '#10b981', '#f43f5e', '#f59e0b', '#06b6d4', '#64748b', '#ec4899', '#84cc16', '#eab308'];
         const total = Object.values(categoriesTotal).reduce((a, b) => a + b, 0);
         if (total === 0) return <div className="h-48 flex items-center justify-center text-slate-500 text-sm font-medium">Sem despesas registradas neste mês.</div>;
         
@@ -407,7 +478,7 @@
           
           {/* Navegação Lateral / Mobile Bottom Bar */}
           <nav className="glass-card md:w-64 flex-shrink-0 md:h-screen md:sticky top-0 z-40 border-b md:border-b-0 md:border-r p-4 md:p-6 flex md:flex-col justify-between order-last md:order-first fixed bottom-0 left-0 right-0 md:relative">
-            <div className="flex flex-col h-full w-full">
+            <div className="flex flex-col h-full w-full overflow-y-auto custom-scrollbar">
               
               <div className="hidden md:flex items-center gap-3 mb-10">
                 <div className="w-12 h-12 flex items-center justify-center">
@@ -425,10 +496,11 @@
                   { id: 'transactions', icon: '💸', label: 'Transações' },
                   { id: 'subscriptions', icon: '🔁', label: 'Assinaturas' },
                   { id: 'installments', icon: '💳', label: 'Parcelas' },
-                  { id: 'sync', icon: '☁️', label: 'Sincronizar' }
+                  { id: 'goals', icon: '🎯', label: 'Metas' },
+                  { id: 'sync', icon: '☁️', label: 'Dados e Sync' }
                 ].map(tab => (
                   <button key={tab.id} onClick={() => setActiveTab(tab.id)} 
-                    className={`flex flex-col md:flex-row items-center md:justify-start gap-1 md:gap-4 px-3 md:px-5 py-2 md:py-4 rounded-2xl transition-all duration-300 font-bold text-xs md:text-sm ${activeTab === tab.id ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 transform md:translate-x-2' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200'}`}>
+                    className={`flex flex-col md:flex-row items-center md:justify-start gap-1 md:gap-4 px-3 md:px-5 py-2 md:py-3 rounded-2xl transition-all duration-300 font-bold text-xs md:text-sm ${activeTab === tab.id ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/30 transform md:translate-x-2' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800 hover:text-slate-800 dark:hover:text-slate-200'}`}>
                     <span className="text-xl md:text-2xl drop-shadow-sm">{tab.icon}</span>
                     <span className="hidden md:inline">{tab.label}</span>
                   </button>
@@ -471,33 +543,43 @@
                 </div>
               </div>
 
-              {}
+              {/* TAB: DASHBOARD */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   
-                  {/* Cards Principais */}
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div className="glass-card p-6 rounded-3xl shadow-sm relative overflow-hidden group">
-                      <div className="absolute -right-6 -top-6 w-24 h-24 bg-brand-500/10 rounded-full blur-xl group-hover:bg-brand-500/20 transition-all"></div>
-                      <h3 className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Receitas Totais</h3>
-                      <div className="text-3xl font-black text-slate-800 dark:text-white mb-4">{formatMoney(totals.inc)}</div>
-                      <div className="pt-4 border-t border-slate-200 dark:border-slate-800/50 flex flex-col gap-2">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Seu Salário Fixo Mensal</label>
-                        <input type="number" step="0.01" value={settings.salary} onChange={handleSaveSalary} className="w-full bg-slate-100 dark:bg-slate-900 rounded-xl px-4 py-2 font-bold text-brand-500 outline-none focus:ring-2 focus:ring-brand-500" placeholder="R$ 0,00" />
+                  {/* Bloco de Salário - Destaque */}
+                  <div className="glass-card p-6 md:p-8 rounded-3xl shadow-lg bg-gradient-to-r from-brand-600 to-brand-800 text-white relative overflow-hidden">
+                    <div className="absolute right-0 top-0 w-64 h-64 bg-white opacity-5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>
+                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                      <div>
+                        <h2 className="text-sm font-bold uppercase tracking-widest text-brand-200 mb-1">Seu Salário / Renda Fixa</h2>
+                        <p className="text-sm text-brand-100/80 max-w-sm">Este valor é adicionado automaticamente ao seu saldo de receitas no cálculo global do mês.</p>
+                      </div>
+                      <div className="flex-shrink-0 flex items-center gap-3 bg-white/10 p-2 rounded-2xl backdrop-blur-md border border-white/20">
+                        <span className="text-xl pl-4 font-bold text-brand-100">R$</span>
+                        <input 
+                          type="number" step="0.01" 
+                          value={settings.salary} 
+                          onChange={handleSaveSalary} 
+                          className="bg-transparent w-full md:w-48 text-3xl font-black text-white outline-none placeholder-brand-200/50" 
+                          placeholder="0.00" 
+                        />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Cards Principais */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="glass-card p-6 rounded-3xl shadow-sm relative overflow-hidden group border-t-4 border-t-brand-500">
+                      <h3 className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Receitas Totais</h3>
+                      <div className="text-3xl font-black text-slate-800 dark:text-white mb-2">{formatMoney(totals.inc)}</div>
+                      <p className="text-xs text-brand-500 font-medium">Inclui salário (R$ {settings.salary || '0'}) + receitas extras.</p>
+                    </div>
                     
-                    <div className="glass-card p-6 rounded-3xl shadow-sm">
+                    <div className="glass-card p-6 rounded-3xl shadow-sm border-t-4 border-t-rose-500">
                       <h3 className="text-xs text-slate-500 font-bold uppercase tracking-wider mb-1">Despesas do Mês</h3>
                       <div className="text-3xl font-black text-rose-500 mb-2">{formatMoney(totals.exp)}</div>
-                      <p className="text-xs text-slate-400 font-medium mt-4 pt-4 border-t border-slate-200 dark:border-slate-800/50">Inclui lançamentos e parcelas ativas deste mês.</p>
-                    </div>
-
-                    <div className="glass-card p-6 rounded-3xl shadow-sm bg-gradient-to-br from-brand-600 to-brand-800 text-white border-none relative overflow-hidden">
-                      <div className="absolute right-0 bottom-0 text-8xl opacity-10 translate-x-4 translate-y-4">💳</div>
-                      <h3 className="text-xs text-brand-100 font-bold uppercase tracking-wider mb-1">Custo de Assinaturas</h3>
-                      <div className="text-3xl font-black mb-2">{formatMoney(totalSubscriptions)}</div>
-                      <p className="text-xs text-brand-200 font-medium mt-4 pt-4 border-t border-brand-500/50">Valor comprometido mensalmente com serviços recorrentes.</p>
+                      <p className="text-xs text-rose-400 font-medium">Inclui lançamentos soltos, assinaturas e parcelas ativas.</p>
                     </div>
                   </div>
 
@@ -521,7 +603,7 @@
                 </div>
               )}
 
-              {}
+              {/* TAB: TRANSACTIONS */}
               {activeTab === 'transactions' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="glass-card p-8 rounded-3xl shadow-lg border-t-4 border-t-brand-500">
@@ -566,7 +648,7 @@
                         filteredTransactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (
                           <div key={t.id} className="group flex flex-col sm:flex-row justify-between sm:items-center p-5 rounded-2xl bg-white/50 dark:bg-slate-800/50 border border-slate-100 dark:border-slate-700 hover:border-brand-300 dark:hover:border-brand-700 transition-all">
                             <div className="flex items-center gap-4">
-                              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${t.type==='income'?'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30':'bg-rose-100 text-rose-600 dark:bg-rose-900/30'}`}>
+                              <div className={`w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg shadow-sm ${t.type==='income'?'bg-brand-100 text-brand-600 dark:bg-brand-900/30':'bg-rose-100 text-rose-600 dark:bg-rose-900/30'}`}>
                                 {t.type==='income'?'+':'-'}
                               </div>
                               <div>
@@ -580,7 +662,7 @@
                               </div>
                             </div>
                             <div className="flex items-center gap-6 mt-4 sm:mt-0 self-end sm:self-auto">
-                              <span className={`font-black text-lg ${t.type==='income'?'text-emerald-500':'text-slate-800 dark:text-white'}`}>{formatMoney(t.value)}</span>
+                              <span className={`font-black text-lg ${t.type==='income'?'text-brand-500':'text-slate-800 dark:text-white'}`}>{formatMoney(t.value)}</span>
                               {!t.autoType && (
                                 <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                                   <button onClick={()=>setTxForm(t)} className="p-2 rounded-xl bg-slate-200 hover:bg-brand-500 hover:text-white dark:bg-slate-700 transition-colors">✏️</button>
@@ -596,18 +678,25 @@
                 </div>
               )}
 
-              {}
+              {/* TAB: SUBSCRIPTIONS */}
               {activeTab === 'subscriptions' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="glass-card p-8 rounded-3xl shadow-lg border-t-4 border-t-brand-500">
-                    <h3 className="font-extrabold text-xl mb-6">{subForm.id ? 'Atualizar Assinatura' : 'Nova Assinatura'}</h3>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                      <h3 className="font-extrabold text-xl">{subForm.id ? 'Atualizar Assinatura' : 'Nova Assinatura'}</h3>
+                      <div className="mt-4 md:mt-0 px-4 py-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl">
+                        <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mb-1">Custo Mensal</p>
+                        <p className="font-black text-rose-600 text-lg">{formatMoney(totalSubscriptions)}</p>
+                      </div>
+                    </div>
+                    
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
                       <div className="lg:col-span-2">
-                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Serviço (Netflix, Spotify...)</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Serviço (Ex: Netflix)</label>
                         <input type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Valor Mensal (R$)</label>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Valor Mensal</label>
                         <input type="number" step="0.01" value={subForm.value} onChange={e=>setSubForm({...subForm, value: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" />
                       </div>
                       <div>
@@ -621,7 +710,7 @@
                         <input type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium text-center" />
                       </div>
                       <div className="lg:col-span-5 flex justify-end gap-3 mt-4">
-                        {subForm.id && <button onClick={()=>setSubForm({id:null,desc:'',value:'',category:'Outros',dayOfMonth:1})} className="px-8 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
+                        {subForm.id && <button onClick={()=>setSubForm({id:null,desc:'',value:'',category:'Assinaturas',dayOfMonth:1})} className="px-8 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
                         <button onClick={handleSaveSub} className="bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 px-10 rounded-xl transition-all shadow-lg shadow-brand-500/30 active:scale-95">Salvar Automação</button>
                       </div>
                     </div>
@@ -664,6 +753,7 @@
                 </div>
               )}
 
+              {/* TAB: INSTALLMENTS */}
               {activeTab === 'installments' && (
                 <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
                   <div className="glass-card p-8 rounded-3xl shadow-lg border-t-4 border-t-brand-500">
@@ -690,7 +780,7 @@
                         <input type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium text-center" />
                       </div>
                       <div className="lg:col-span-6 flex justify-end gap-3 mt-4">
-                        {instForm.id && <button onClick={()=>setInstForm({id:null,desc:'',totalValue:'',currentInstallment:1,totalInstallments:2,dayOfMonth:1,category:'Outros'})} className="px-8 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
+                        {instForm.id && <button onClick={()=>setInstForm({id:null,desc:'',totalValue:'',currentInstallment:1,totalInstallments:2,dayOfMonth:1,category:'Dívidas'})} className="px-8 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
                         <button onClick={handleSaveInst} className="bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 px-10 rounded-xl transition-all shadow-lg shadow-brand-500/30 active:scale-95">Salvar Parcelamento</button>
                       </div>
                     </div>
@@ -705,10 +795,13 @@
                         const pct = (cur / i.totalInstallments) * 100;
                         const parcelValue = parseFloat(i.totalValue) / parseInt(i.totalInstallments);
                         return (
-                          <div key={i.id} className={`glass-card p-6 rounded-3xl border-2 transition-all ${i.active ? 'border-transparent shadow-md' : 'border-emerald-500/50 opacity-80'}`}>
+                          <div key={i.id} className={`glass-card p-6 rounded-3xl border-2 transition-all ${i.active ? 'border-transparent shadow-md' : 'border-brand-500/50 opacity-80'}`}>
                             <div className="flex justify-between items-start mb-4">
                               <h4 className="font-extrabold text-lg">{i.desc}</h4>
-                              <button onClick={()=>setInstallments(prev=>prev.filter(x=>x.id!==i.id))} className="text-slate-400 hover:text-rose-500">🗑️</button>
+                              <div className="flex gap-2">
+                                <button onClick={()=>setInstForm(i)} className="text-slate-400 hover:text-brand-500">✏️</button>
+                                <button onClick={()=>setInstallments(prev=>prev.filter(x=>x.id!==i.id))} className="text-slate-400 hover:text-rose-500">🗑️</button>
+                              </div>
                             </div>
                             <div className="mb-4">
                               <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
@@ -737,20 +830,110 @@
                 </div>
               )}
 
-              {activeTab === 'sync' && (
-                <div className="max-w-2xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-                  <div className="glass-card p-10 rounded-3xl shadow-xl text-center">
-                    <div className="w-20 h-20 bg-brand-100 dark:bg-brand-900/30 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-inner">
-                      👩‍❤️‍👨
+              {/* TAB: GOALS */}
+              {activeTab === 'goals' && (
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  <div className="glass-card p-8 rounded-3xl shadow-lg border-t-4 border-t-brand-500">
+                    <h3 className="font-extrabold text-xl mb-6">{goalForm.id ? 'Atualizar Meta' : 'Nova Meta Financeira'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-5 gap-5 items-end">
+                      <div className="md:col-span-2">
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Nome da Meta (Ex: Carro Novo)</label>
+                        <input type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Valor Alvo (R$)</label>
+                        <input type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Já Guardado (R$)</label>
+                        <input type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" />
+                      </div>
+                      <div className="flex gap-2">
+                        {goalForm.id && <button onClick={()=>setGoalForm({id:null,name:'',target:'',current:'0'})} className="px-4 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">✕</button>}
+                        <button onClick={handleAddGoal} className="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 px-4 rounded-xl transition-all shadow-lg shadow-brand-500/30 active:scale-95">Salvar</button>
+                      </div>
                     </div>
-                    <h2 className="text-2xl font-black mb-2">Sincronização de Casal</h2>
-                    <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed">
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {goals.length === 0 ? (
+                      <div className="col-span-full text-center py-10 text-slate-500 font-medium bg-slate-100/50 dark:bg-slate-800/30 rounded-2xl">Nenhuma meta criada. Defina os seus objetivos!</div>
+                    ) : (
+                      goals.map(g => {
+                        const pct = Math.min(100, (g.current / g.target) * 100);
+                        return (
+                          <div key={g.id} className="glass-card p-6 rounded-3xl flex flex-col justify-between shadow-sm">
+                            <div>
+                              <div className="flex justify-between items-start mb-2">
+                                <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{g.name}</h3>
+                                <div className="flex gap-1">
+                                  <button onClick={()=>setGoalForm(g)} className="p-2 text-slate-400 hover:text-brand-500">✏️</button>
+                                  <button onClick={()=>setGoals(prev=>prev.filter(x=>x.id!==g.id))} className="p-2 text-slate-400 hover:text-rose-500">🗑️</button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-slate-500 font-medium mb-6">
+                                <span className="font-bold text-slate-700 dark:text-slate-300">{formatMoney(g.current)}</span> de {formatMoney(g.target)}
+                              </p>
+                            </div>
+                            <div>
+                              <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
+                                <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000" style={{ width: `${pct}%` }}></div>
+                              </div>
+                              <div className="text-right text-[10px] font-black text-brand-500">{pct.toFixed(1)}% CONCLUÍDO</div>
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* TAB: SYNC & DATA */}
+              {activeTab === 'sync' && (
+                <div className="max-w-4xl mx-auto space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                  
+                  {/* Bloco de Dados em CSV */}
+                  <div className="glass-card p-8 md:p-10 rounded-3xl shadow-lg border-t-4 border-t-emerald-500">
+                    <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
+                      <div className="w-16 h-16 bg-emerald-100 dark:bg-emerald-900/30 rounded-2xl flex items-center justify-center text-3xl shadow-inner">📊</div>
+                      <div>
+                        <h2 className="text-2xl font-black mb-1">Os Seus Dados (CSV)</h2>
+                        <p className="text-slate-500 text-sm font-medium">Faça o download das suas transações para o Excel ou importe uma lista de lançamentos.</p>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-center">
+                        <h3 className="font-bold mb-2 uppercase tracking-widest text-xs text-emerald-600 dark:text-emerald-400">Exportar para Excel</h3>
+                        <p className="text-xs text-slate-500 mb-6">Gera um arquivo .csv com todo o seu histórico financeiro.</p>
+                        <button onClick={handleExportCSV} className="w-full bg-emerald-500 hover:bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-emerald-500/30 transition-all active:scale-95">
+                          Descarregar Finanças.csv
+                        </button>
+                      </div>
+
+                      <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-center relative">
+                        <h3 className="font-bold mb-2 uppercase tracking-widest text-xs text-blue-600 dark:text-blue-400">Importar Transações</h3>
+                        <p className="text-xs text-slate-500 mb-6">Formato: Data(YYYY-MM-DD), Tipo, Categoria, Descrição, Valor</p>
+                        <label className="w-full block bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-95 cursor-pointer">
+                          Escolher Arquivo .csv
+                          <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Bloco de Sync Casal */}
+                  <div className="glass-card p-8 md:p-10 rounded-3xl shadow-lg border-t-4 border-t-brand-500 text-center mt-8">
+                    <div className="w-16 h-16 bg-brand-100 dark:bg-brand-900/30 rounded-2xl flex items-center justify-center text-3xl mx-auto mb-6 shadow-inner">👩‍❤️‍👨</div>
+                    <h2 className="text-2xl font-black mb-2">Sincronização de Casal Offline</h2>
+                    <p className="text-slate-500 text-sm font-medium mb-10 leading-relaxed max-w-xl mx-auto">
                       Partilhe os dados financeiros de forma segura via código. 
-                      Gere o código no celular 1, envie por mensagem, e importe no celular 2.
+                      Gere o código no celular 1, envie pelo WhatsApp, e importe no celular 2.
                       Os dados não são apagados, são fundidos inteligentemente.
                     </p>
 
-                    <div className="space-y-8">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8 text-left">
                       <div className="p-6 bg-slate-50 dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800">
                         <h3 className="font-bold mb-4 uppercase tracking-widest text-xs text-brand-500">Passo 1: Exportar</h3>
                         <button onClick={generateSyncCode} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all active:scale-95">
@@ -763,7 +946,7 @@
                         <textarea 
                           value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)}
                           placeholder="Cole o código gigantesco aqui..."
-                          className="w-full h-32 px-4 py-3 bg-white dark:bg-slate-950 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs text-slate-500 mb-4 resize-none border border-slate-200 dark:border-slate-800 custom-scrollbar"
+                          className="w-full h-24 px-4 py-3 bg-white dark:bg-slate-950 rounded-xl outline-none focus:ring-2 focus:ring-blue-500 font-mono text-[10px] text-slate-500 mb-4 resize-none border border-slate-200 dark:border-slate-800 custom-scrollbar"
                         ></textarea>
                         <button onClick={handleImportSyncCode} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-500/30 transition-all active:scale-95">
                           Fundir Dados 📥
@@ -771,6 +954,7 @@
                       </div>
                     </div>
                   </div>
+                  
                 </div>
               )}
 
