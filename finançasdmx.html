@@ -109,6 +109,7 @@
       const [activeTab, setActiveTab] = useState('dashboard');
       const [toasts, setToasts] = useState([]);
       const [syncCodeInput, setSyncCodeInput] = useState('');
+      const [showAI, setShowAI] = useState(false);
 
       const [txForm, setTxForm] = useState({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: new Date().toISOString().slice(0, 10) });
       const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '', current: '0' });
@@ -157,11 +158,14 @@
         return { inc: inc + salary, exp, balance: (inc + salary) - exp, rawInc: inc };
       }, [filteredTransactions, settings.salary]);
 
+      // Modificado para guardar o Valor e a Contagem exata de itens
       const categoriesTotal = useMemo(() => {
         const expenses = {};
         filteredTransactions.forEach(t => {
           if (t.type === 'expense') {
-            expenses[t.category] = (expenses[t.category] || 0) + t.value;
+            if (!expenses[t.category]) expenses[t.category] = { val: 0, count: 0 };
+            expenses[t.category].val += t.value;
+            expenses[t.category].count += 1;
           }
         });
         return expenses;
@@ -221,7 +225,7 @@
         }
         if (instsUpdated) setInstallments(nextInsts);
 
-      }, [subscriptions, installments, transactions]); // Verifica sempre que abrir ou mudar o mês
+      }, [subscriptions, installments, transactions]);
 
 
       const generateSyncCode = () => {
@@ -236,7 +240,6 @@
         try {
           const data = JSON.parse(decodeURIComponent(atob(syncCodeInput)));
           
-          // Função auxiliar para fundir arrays evitando duplicatas por ID
           const mergeArrays = (arr1, arr2) => {
             const map = new Map();
             (arr1 || []).forEach(i => map.set(i.id, i));
@@ -384,17 +387,60 @@
         'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'
       ];
 
+      // Lógica do Analista IA (Heurística Local)
+      const generateAIReport = () => {
+        const report = [];
+        const balance = totals.inc - totals.exp;
+        const saveRate = totals.inc > 0 ? (balance / totals.inc) * 100 : 0;
+
+        // 1. Análise de Saúde Geral
+        if (totals.inc === 0) {
+            report.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda Registrada', text: 'Cadastre seu salário ou receitas extras para uma análise precisa de proporção.' });
+        } else if (totals.exp > totals.inc) {
+            report.push({ type: 'danger', icon: '🚨', title: 'Alerta Crítico: Gastos Excedentes', text: `Você gastou ${formatMoney(Math.abs(balance))} a mais do que ganhou este mês. Você está consumindo reservas ou criando dívidas.` });
+        } else if (saveRate >= 20) {
+            report.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Parabéns! Você está poupando ${saveRate.toFixed(1)}% da sua renda. A regra de ouro é poupar pelo menos 20%. Mantenha o foco.` });
+        } else {
+            report.push({ type: 'warning', icon: '📉', title: 'Atenção à Poupança', text: `Você está retendo apenas ${saveRate.toFixed(1)}% do que ganha. Tente otimizar gastos não essenciais para chegar à meta de 20%.` });
+        }
+
+        // 2. Análise de Categorias e Volumes
+        const cats = Object.entries(categoriesTotal).sort((a,b)=>b[1].val - a[1].val);
+        if (cats.length > 0) {
+            const [topCat, data] = cats[0];
+            const pctOfTotal = (data.val / totals.exp) * 100;
+            
+            let advice = `Esta categoria representa ${pctOfTotal.toFixed(1)}% de todas as suas despesas mensais.`;
+            if (data.count >= 10) {
+                advice += ` Cuidado: você registrou ${data.count} compras diferentes só aqui. O alto volume de pequenas compras ("gastos invisíveis") costuma ser o maior destruidor de orçamentos.`;
+            } else if (pctOfTotal > 40 && topCat !== 'Habitação') {
+                advice += ` Estar concentrando mais de 40% da renda em uma única área pode desequilibrar suas metas de longo prazo.`;
+            }
+            
+            report.push({ type: 'info', icon: '💡', title: `Maior Ralo Financeiro: ${topCat}`, text: advice });
+        }
+
+        // 3. Análise de Assinaturas (Custo Fixo)
+        const activeSubs = subscriptions.filter(s => s.active);
+        if (activeSubs.length >= 4) {
+            const subVal = activeSubs.reduce((acc, s) => acc + parseFloat(s.value), 0);
+            report.push({ type: 'warning', icon: '👀', title: 'Alerta de Custo Fixo Elevado', text: `Você possui ${activeSubs.length} assinaturas ativas totalizando ${formatMoney(subVal)}. É comum esquecermos serviços que não usamos. Faça uma revisão para evitar desperdício contínuo.` });
+        }
+
+        return report;
+      };
+
       // Gráfico Donut Dinâmico
       const DonutChart = () => {
         const colors = ['#0ea5e9', '#8b5cf6', '#10b981', '#f43f5e', '#f59e0b', '#06b6d4', '#64748b', '#ec4899', '#84cc16', '#eab308'];
-        const total = Object.values(categoriesTotal).reduce((a, b) => a + b, 0);
+        const total = Object.values(categoriesTotal).reduce((a, b) => a + b.val, 0);
         if (total === 0) return <div className="h-48 flex items-center justify-center text-slate-500 text-sm font-medium">Sem despesas registradas neste mês.</div>;
         
         let cum = 0;
-        const slices = Object.entries(categoriesTotal).sort((a,b)=>b[1]-a[1]).map(([cat, val], i) => {
-          const pct = (val / total) * 100;
+        const slices = Object.entries(categoriesTotal).sort((a,b)=>b[1].val-a[1].val).map(([cat, data], i) => {
+          const pct = (data.val / total) * 100;
           const offset = cum; cum += pct;
-          return { cat, val, pct, offset, color: colors[i % colors.length] };
+          return { cat, val: data.val, count: data.count, pct, offset, color: colors[i % colors.length] };
         });
 
         return (
@@ -421,7 +467,7 @@
                   </div>
                   <div className="text-right flex-shrink-0">
                     <div className="font-bold">{formatMoney(s.val)}</div>
-                    <div className="text-[10px] text-slate-500">{s.pct.toFixed(1)}%</div>
+                    <div className="text-[10px] text-slate-500 font-medium">{s.pct.toFixed(1)}% &bull; {s.count} {s.count === 1 ? 'registro' : 'registros'}</div>
                   </div>
                 </div>
               ))}
@@ -567,6 +613,50 @@
                       </div>
                     </div>
                   </div>
+
+                  {/* Consultor IA Botão */}
+                  <div className="flex justify-end">
+                    <button 
+                      onClick={() => setShowAI(!showAI)} 
+                      className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:scale-105'}`}
+                    >
+                      <span>✨</span> Analisar Finanças com IA
+                    </button>
+                  </div>
+
+                  {/* Relatório IA (Heurística) */}
+                  {showAI && (
+                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-xl border border-blue-500/30 animate-in zoom-in-95 duration-300">
+                      <h3 className="font-extrabold text-xl mb-6 flex items-center gap-2">
+                        <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-purple-500">Relatório de Inteligência</span>
+                      </h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {generateAIReport().map((report, idx) => {
+                          const bgColors = {
+                            'success': 'bg-emerald-100/50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+                            'warning': 'bg-amber-100/50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+                            'danger': 'bg-rose-100/50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800',
+                            'info': 'bg-blue-100/50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800'
+                          };
+                          const textColors = {
+                            'success': 'text-emerald-800 dark:text-emerald-400',
+                            'warning': 'text-amber-800 dark:text-amber-400',
+                            'danger': 'text-rose-800 dark:text-rose-400',
+                            'info': 'text-blue-800 dark:text-blue-400'
+                          };
+                          
+                          return (
+                            <div key={idx} className={`p-5 rounded-2xl border ${bgColors[report.type]}`}>
+                              <h4 className={`font-bold mb-2 flex items-center gap-2 ${textColors[report.type]}`}>
+                                <span>{report.icon}</span> {report.title}
+                              </h4>
+                              <p className="text-sm text-slate-700 dark:text-slate-300 font-medium leading-relaxed">{report.text}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Cards Principais */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
