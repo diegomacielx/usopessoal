@@ -2,9 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <!-- MELHORIA 4: Removido user-scalable=no para permitir zoom (Acessibilidade WCAG) -->
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
-  <title>Finanças DMX</title>
+  <title>Finanças DMX – Ultimate</title>
   
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -19,7 +18,22 @@
           fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
           colors: {
             brand: { 50: '#f0fdfa', 100: '#ccfbf1', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a', 950: '#042f2e' },
-            partner: { 500: '#8b5cf6', 600: '#7c3aed' }
+            partner: { 50: '#f5f3ff', 100: '#ede9fe', 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 900: '#4c1d95' }
+          },
+          animation: {
+            'blob': 'blob 7s infinite',
+            'fade-in': 'fadeIn 0.5s ease-out forwards',
+            'slide-up': 'slideUp 0.5s ease-out forwards',
+          },
+          keyframes: {
+            blob: {
+              '0%': { transform: 'translate(0px, 0px) scale(1)' },
+              '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
+              '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
+              '100%': { transform: 'translate(0px, 0px) scale(1)' },
+            },
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
           }
         },
       },
@@ -32,19 +46,42 @@
   <script src="https://cdn.jsdelivr.net/npm/idb-keyval@6/dist/umd.js"></script>
 
   <style>
-    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; transition: background-color 0.3s ease, color 0.3s ease; }
+    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
     .custom-scrollbar::-webkit-scrollbar { width: 6px; }
     .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
-    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #cbd5e1; border-radius: 10px; }
-    .dark .custom-scrollbar::-webkit-scrollbar-thumb { background-color: #334155; }
-    .glass-card { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(12px); border: 1px solid rgba(255, 255, 255, 0.5); }
-    .dark .glass-card { background: rgba(15, 23, 42, 0.6); backdrop-filter: blur(16px); border: 1px solid rgba(255, 255, 255, 0.05); }
-    .donut-segment { transition: stroke-dashoffset 1s ease-in-out; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.3); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.5); }
+    
+    .glass-card { 
+      background: rgba(255, 255, 255, 0.65); 
+      backdrop-filter: blur(20px); 
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6); 
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+    }
+    .dark .glass-card { 
+      background: rgba(15, 23, 42, 0.6); 
+      border: 1px solid rgba(255, 255, 255, 0.08); 
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
     .field-error { border-color: #f43f5e !important; background-color: rgba(244, 63, 94, 0.05) !important; }
-    .error-message { color: #f43f5e; font-size: 0.75rem; margin-top: 4px; font-weight: 600; }
+    .error-message { color: #f43f5e; font-size: 0.75rem; margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    
+    /* Gráfico Donut Suave */
+    .donut-segment { transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s; }
+    .donut-segment:hover { stroke-width: 14; filter: drop-shadow(0 0 4px currentColor); }
   </style>
 </head>
-<body class="bg-slate-50 text-slate-900 dark:bg-[#0B1120] dark:text-slate-100 min-h-screen">
+<body class="bg-slate-50 text-slate-900 dark:bg-[#050914] dark:text-slate-100 min-h-screen transition-colors duration-500">
+  
+  <!-- Ambient Background Glows -->
+  <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+    <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-400/20 dark:bg-brand-500/10 rounded-full blur-[120px] animate-blob"></div>
+    <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-400/20 dark:bg-partner-500/10 rounded-full blur-[120px] animate-blob" style={{animationDelay: '2s'}}></div>
+    <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-blue-400/10 dark:bg-blue-500/5 rounded-full blur-[100px] animate-blob" style={{animationDelay: '4s'}}></div>
+  </div>
+
   <div id="root"></div>
 
   <script type="text/babel">
@@ -58,7 +95,6 @@
     };
     const formatMoney = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     
-    // MELHORIA 1: Fallback de ID robusto (UUID v4 customizado) para evitar colisões em sistemas distribuídos
     const generateId = () => {
       if (window.crypto?.randomUUID) return crypto.randomUUID();
       return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
@@ -70,10 +106,7 @@
     const deriveKey = async (password, salt) => {
       const enc = new TextEncoder();
       const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveKey"]);
-      return await crypto.subtle.deriveKey(
-        { name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" },
-        keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]
-      );
+      return await crypto.subtle.deriveKey({ name: "PBKDF2", salt, iterations: 100000, hash: "SHA-256" }, keyMaterial, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
     };
     const encryptData = async (text, password) => {
       const salt = crypto.getRandomValues(new Uint8Array(16));
@@ -94,35 +127,51 @@
 
     const predefinedCategories = ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Habitação', 'Educação', 'Vestuário', 'Pets', 'Assinaturas', 'Dívidas', 'Investimentos', 'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'];
 
-    // --- Componentes Memoizados ---
+    // --- Componentes Visuais Premium ---
+    const BentoCard = ({ children, className = "", title, icon, action }) => (
+      <div className={`glass-card p-6 rounded-3xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 ${className}`}>
+        {(title || action) && (
+          <div className="flex justify-between items-start mb-5">
+            {title && <h3 className="font-bold text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">{icon} {title}</h3>}
+            {action}
+          </div>
+        )}
+        {children}
+      </div>
+    );
+
     const DonutChart = memo(({ categoriesTotal }) => {
-      if (Object.keys(categoriesTotal).length === 0) return <p className="text-slate-500 text-center py-4">Sem gastos neste período.</p>;
+      if (Object.keys(categoriesTotal).length === 0) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Sem dados para exibir</div>;
       const sorted = Object.entries(categoriesTotal).sort((a,b) => b[1].val - a[1].val);
       const total = sorted.reduce((acc, curr) => acc + curr[1].val, 0);
-      const colors = ['#0ea5e9', '#8b5cf6', '#10b981', '#f43f5e', '#f59e0b', '#06b6d4', '#64748b'];
+      const colors = ['#14b8a6', '#8b5cf6', '#3b82f6', '#f43f5e', '#f59e0b', '#10b981', '#64748b'];
       
       return (
-        <div className="flex flex-col md:flex-row items-center gap-6">
-          <div className="relative w-32 h-32 flex-shrink-0 drop-shadow-xl">
-            <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90">
-              <circle cx="50" cy="50" r="40" fill="transparent" strokeWidth="12" className="stroke-slate-200 dark:stroke-slate-800 opacity-30" />
+        <div className="flex flex-col md:flex-row items-center gap-8">
+          <div className="relative w-40 h-40 flex-shrink-0">
+            <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90 drop-shadow-xl">
+              <circle cx="50" cy="50" r="40" fill="transparent" strokeWidth="10" className="stroke-slate-200 dark:stroke-slate-800" />
               {sorted.map(([cat, data], i) => {
                 const pct = (data.val / total) * 100;
                 const offset = sorted.slice(0, i).reduce((acc, curr) => acc + (curr[1].val / total) * 100, 0);
-                return <circle key={cat} cx="50" cy="50" r="40" fill="transparent" strokeWidth="12" stroke={colors[i % colors.length]} strokeDasharray={`${(pct / 100) * 251.2} 251.2`} strokeDashoffset={-(offset / 100) * 251.2} className="donut-segment" />;
+                return <circle key={cat} cx="50" cy="50" r="40" fill="transparent" strokeWidth="10" stroke={colors[i % colors.length]} strokeDasharray={`${(pct / 100) * 251.2} 251.2`} strokeDashoffset={-(offset / 100) * 251.2} className="donut-segment" strokeLinecap="round" />;
               })}
             </svg>
+            <div className="absolute inset-0 flex items-center justify-center flex-col">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total</span>
+              <span className="text-sm font-black text-slate-800 dark:text-white">{formatMoney(total)}</span>
+            </div>
           </div>
           <div className="flex-1 space-y-3 w-full max-h-48 overflow-y-auto custom-scrollbar pr-2">
             {sorted.map(([cat, data], i) => (
-              <div key={cat} className="flex justify-between items-center text-sm gap-2">
-                <div className="flex items-center gap-2 flex-1 min-w-0">
-                  <span className="w-3 h-3 rounded-full flex-shrink-0" style={{backgroundColor: colors[i % colors.length]}}></span>
-                  <span className="font-medium truncate">{cat}</span>
+              <div key={cat} className="flex justify-between items-center text-sm gap-3 group">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" style={{backgroundColor: colors[i % colors.length]}}></span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{cat}</span>
                 </div>
                 <div className="text-right flex-shrink-0">
-                  <div className="font-bold">{formatMoney(data.val)}</div>
-                  <div className="text-[10px] text-slate-500">{((data.val / total) * 100).toFixed(1)}% &bull; {data.count}x</div>
+                  <div className="font-bold text-slate-900 dark:text-white">{formatMoney(data.val)}</div>
+                  <div className="text-[10px] text-slate-500 font-medium">{((data.val / total) * 100).toFixed(1)}% &bull; {data.count}x</div>
                 </div>
               </div>
             ))}
@@ -139,7 +188,7 @@
         t.type === 'income' ? monthlyData[month].inc += t.value : monthlyData[month].exp += t.value;
       });
       const sortedMonths = Object.keys(monthlyData).sort().slice(-6);
-      if(sortedMonths.length === 0) return <p className="text-slate-500 text-center py-10">Sem histórico suficiente.</p>;
+      if(sortedMonths.length === 0) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Histórico insuficiente</div>;
       
       let maxVal = 1;
       const items = sortedMonths.map(m => {
@@ -150,14 +199,14 @@
       });
       
       return (
-        <div className="h-48 flex items-end justify-between gap-2 mt-4">
+        <div className="h-56 flex items-end justify-between gap-3 mt-4 px-2">
           {items.map(item => (
-            <div key={item.month} className="flex flex-col items-center flex-1 group">
-              <div className="flex items-end justify-center w-full h-40 gap-1 relative">
-                <div className="w-1/3 max-w-[20px] bg-brand-500 rounded-t-md opacity-90 transition-all duration-700 group-hover:opacity-100" style={{ height: `${(item.inc / maxVal) * 100}%` }} title={`Receita: ${formatMoney(item.inc)}`}></div>
-                <div className="w-1/3 max-w-[20px] bg-rose-500 rounded-t-md opacity-90 transition-all duration-700 group-hover:opacity-100" style={{ height: `${(item.exp / maxVal) * 100}%` }} title={`Despesa: ${formatMoney(item.exp)}`}></div>
+            <div key={item.month} className="flex flex-col items-center flex-1 group cursor-pointer">
+              <div className="flex items-end justify-center w-full h-44 gap-1 relative">
+                <div className="w-2/5 max-w-[24px] bg-gradient-to-t from-brand-600 to-brand-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" style={{ height: `${(item.inc / maxVal) * 100}%` }} title={`Receita: ${formatMoney(item.inc)}`}></div>
+                <div className="w-2/5 max-w-[24px] bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" style={{ height: `${(item.exp / maxVal) * 100}%` }} title={`Despesa: ${formatMoney(item.exp)}`}></div>
               </div>
-              <span className="text-[10px] text-slate-500 mt-2 font-bold tracking-wider">{item.month}</span>
+              <span className="text-[11px] text-slate-500 mt-3 font-bold tracking-wide group-hover:text-brand-500 transition-colors">{item.month}</span>
             </div>
           ))}
         </div>
@@ -170,7 +219,6 @@
       const [transactions, setTransactions] = useState([]);
       const [goals, setGoals] = useState([]);
       const [budgets, setBudgets] = useState({});
-      // MELHORIA 3: Metadados desacoplados dos dados puros
       const [budgetsMeta, setBudgetsMeta] = useState({ updatedAt: Date.now() }); 
       const [subscriptions, setSubscriptions] = useState([]);
       const [installments, setInstallments] = useState([]);
@@ -185,14 +233,12 @@
       const [syncPassword, setSyncPassword] = useState('');
       const [showAI, setShowAI] = useState(false);
 
-      // Estados de formulário (dados puros)
       const [txForm, setTxForm] = useState({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'joint', paidBy: 'A' });
       const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '', current: '0' });
       const [budgetForm, setBudgetForm] = useState({ category: 'Alimentação', limit: '' });
       const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
       const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
 
-      // MELHORIA 5: Estado de erros centralizado e separado dos dados
       const [formErrors, setFormErrors] = useState({ tx: {}, goal: {}, budget: {}, sub: {}, inst: {} });
 
       const showToast = useCallback((msg, isError = false) => {
@@ -201,7 +247,6 @@
         setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
       }, []);
 
-      // DB Load/Save
       useEffect(() => {
         Promise.all([ get('dmx_transactions'), get('dmx_goals'), get('dmx_budgets'), get('dmx_budgets_meta'), get('dmx_subscriptions'), get('dmx_installments'), get('dmx_settings'), get('dmx_deleted') ])
         .then(([txs, gls, bdg, bdgMeta, subs, insts, sets, dels]) => {
@@ -257,7 +302,6 @@
         return { totalJointExp, ratioA, ratioB, balanceA: paidByA - (totalJointExp * ratioA), balanceB: paidByB - (totalJointExp * ratioB) };
       }, [filteredTransactions, settings.salaryA, settings.salaryB]);
 
-      // Automações
       useEffect(() => {
         if (!isLoaded) return;
         const d = new Date(); const curYear = d.getFullYear(); const curMonth = d.getMonth(); const curDay = d.getDate();
@@ -287,23 +331,21 @@
           return inst;
         });
 
-        if (newTxs.length > 0) { setTransactions(prev => [...newTxs, ...prev]); showToast(`${newTxs.length} lançamento(s) automático(s) gerado(s).`); }
+        if (newTxs.length > 0) { setTransactions(prev => [...newTxs, ...prev]); showToast(`${newTxs.length} lançamento(s) automático(s).`); }
         if (instsUpdated) setInstallments(nextInsts);
       }, [subscriptions, installments, transactions, isLoaded]);
 
-      // MELHORIA 2 & 5: Handlers usando form onSubmit e estado de erros separado
+      // Handlers
       const handleSaveTx = (e) => {
         e.preventDefault();
         const errors = {};
         if (!txForm.desc.trim()) errors.desc = 'Descrição obrigatória';
         const val = parseFloat(txForm.value);
-        if (isNaN(val) || val <= 0) errors.value = 'Valor deve ser maior que zero';
+        if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, tx: errors})); return; }
-        
         const payload = { ...txForm, category: txForm.customCategory.trim() || txForm.category, value: val, updatedAt: Date.now() };
         if (txForm.id) setTransactions(prev => prev.map(t => t.id === txForm.id ? payload : t));
         else setTransactions(prev => [{ ...payload, id: generateId() }, ...prev]);
-        
         setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'joint', paidBy: 'A' });
         setFormErrors(prev => ({...prev, tx: {}}));
         showToast("Transação salva.");
@@ -318,11 +360,9 @@
         const day = parseInt(subForm.dayOfMonth);
         if (isNaN(day) || day < 1 || day > 31) errors.dayOfMonth = 'Dia inválido (1-31)';
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, sub: errors})); return; }
-        
         const payload = { ...subForm, value: val, dayOfMonth: day, active: subForm.id ? subForm.active : true, updatedAt: Date.now() };
         if (subForm.id) setSubscriptions(prev => prev.map(s => s.id === subForm.id ? payload : s));
         else setSubscriptions(prev => [...prev, { ...payload, id: generateId() }]);
-        
         setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
         setFormErrors(prev => ({...prev, sub: {}}));
         showToast("Assinatura salva.");
@@ -333,18 +373,16 @@
         const errors = {};
         if (!instForm.desc.trim()) errors.desc = 'Descrição obrigatória';
         const val = parseFloat(instForm.installmentValue);
-        if (isNaN(val) || val <= 0) errors.installmentValue = 'Valor da parcela inválido';
+        if (isNaN(val) || val <= 0) errors.installmentValue = 'Valor inválido';
         const tot = parseInt(instForm.totalInstallments);
-        if (isNaN(tot) || tot < 2) errors.totalInstallments = 'Total de parcelas >= 2';
+        if (isNaN(tot) || tot < 2) errors.totalInstallments = 'Mínimo 2 parcelas';
         const day = parseInt(instForm.dayOfMonth);
         if (isNaN(day) || day < 1 || day > 31) errors.dayOfMonth = 'Dia inválido (1-31)';
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, inst: errors})); return; }
-        
         const paid = parseInt(instForm.paidInstallments) || 0;
         const payload = { ...instForm, installmentValue: val, totalInstallments: tot, paidInstallments: paid, dayOfMonth: day, active: paid < tot, updatedAt: Date.now() };
         if (instForm.id) setInstallments(prev => prev.map(i => i.id === instForm.id ? payload : i));
         else setInstallments(prev => [...prev, { ...payload, id: generateId() }]);
-        
         setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
         setFormErrors(prev => ({...prev, inst: {}}));
         showToast("Parcelamento salvo.");
@@ -357,47 +395,43 @@
         const target = parseFloat(goalForm.target);
         if (isNaN(target) || target <= 0) errors.target = 'Valor alvo inválido';
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, goal: errors})); return; }
-        
         const current = parseFloat(goalForm.current) || 0;
         const payload = { ...goalForm, target, current, updatedAt: Date.now() };
         if (goalForm.id) setGoals(prev => prev.map(g => g.id === goalForm.id ? payload : g));
         else setGoals(prev => [...prev, { ...payload, id: generateId() }]);
-        
         setGoalForm({ id: null, name: '', target: '', current: '0' });
         setFormErrors(prev => ({...prev, goal: {}}));
         showToast("Meta salva.");
       };
 
       const handleDelete = (type, id) => {
-        if (!window.confirm("Apagar registo permanentemente?")) return;
+        if (!window.confirm("Apagar permanentemente?")) return;
         setDeletedRecords(prev => [...prev, id]);
         if (type === 'tx') setTransactions(prev => prev.filter(t => t.id !== id));
         if (type === 'sub') setSubscriptions(prev => prev.filter(s => s.id !== id));
         if (type === 'inst') setInstallments(prev => prev.filter(i => i.id !== id));
         if (type === 'goal') setGoals(prev => prev.filter(g => g.id !== id));
-        showToast("Eliminado com sucesso.");
+        showToast("Eliminado.");
       };
 
       const handleGenerateSyncCode = async () => {
-        if (!syncPassword) return showToast("Digite uma senha segura primeiro.", true);
+        if (!syncPassword) return showToast("Digite uma senha segura.", true);
         try {
           const payload = { transactions, goals, budgets, budgetsMeta, subscriptions, installments, settings, deletedRecords };
           const encrypted = await encryptData(JSON.stringify(payload), syncPassword);
           navigator.clipboard?.writeText(encrypted);
-          setSyncCodeInput(encrypted); showToast("Código gerado e copiado!");
+          setSyncCodeInput(encrypted); showToast("Código copiado!");
         } catch (e) { showToast("Erro de criptografia.", true); }
       };
 
       const handleImportSyncCode = async () => {
-        if (!syncCodeInput || !syncPassword) return showToast("Cole o código e digite a senha.", true);
+        if (!syncCodeInput || !syncPassword) return showToast("Cole o código e a senha.", true);
         try {
           const decrypted = await decryptData(syncCodeInput, syncPassword);
           const data = JSON.parse(decrypted);
           const newDeleted = Array.from(new Set([...deletedRecords, ...(data.deletedRecords || [])]));
-          
           const mergeCRDT = (local = [], remote = []) => {
-            const map = new Map();
-            local.forEach(i => map.set(i.id, i));
+            const map = new Map(); local.forEach(i => map.set(i.id, i));
             remote.forEach(i => {
               if (newDeleted.includes(i.id)) return;
               const existing = map.get(i.id);
@@ -405,15 +439,14 @@
             });
             return Array.from(map.values()).filter(i => !newDeleted.includes(i.id));
           };
-
           setTransactions(mergeCRDT(transactions, data.transactions)); setGoals(mergeCRDT(goals, data.goals));
           setSubscriptions(mergeCRDT(subscriptions, data.subscriptions)); setInstallments(mergeCRDT(installments, data.installments));
           setDeletedRecords(newDeleted);
           if (data.budgets) setBudgets(data.budgets);
           if (data.budgetsMeta && (data.budgetsMeta.updatedAt || 0) > (budgetsMeta.updatedAt || 0)) setBudgetsMeta(data.budgetsMeta);
           if (data.settings && (data.settings.updatedAt || 0) > (settings.updatedAt || 0)) setSettings(data.settings);
-          setSyncCodeInput(''); setSyncPassword(''); showToast("Sync CRDT Concluído! 🚀");
-        } catch (e) { showToast("Senha incorreta ou código inválido.", true); }
+          setSyncCodeInput(''); setSyncPassword(''); showToast("Sync concluído! 🚀");
+        } catch (e) { showToast("Senha ou código inválido.", true); }
       };
 
       const handleExportCSV = () => {
@@ -424,256 +457,378 @@
         link.download = "financas_dmx.csv"; link.click(); showToast("CSV exportado.");
       };
 
-      const handleImportCSV = (e) => {
-        const file = e.target.files[0]; if (!file) return;
-        const reader = new FileReader();
-        reader.onload = (evt) => {
-          const lines = evt.target.result.split(/\r?\n/); let added = 0; const newTxs = [];
-          for (let i = 1; i < lines.length; i++) {
-            if (!lines[i].trim()) continue;
-            const columns = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            if (columns.length >= 5) {
-              const [date, type, category, desc, value] = columns.map(c => c.trim().replace(/^"|"$/g, ''));
-              if (date && value && !isNaN(parseFloat(value))) {
-                newTxs.push({ id: generateId(), date, type: type === 'income' ? 'income' : 'expense', category, desc, value: parseFloat(value), scope: 'joint', paidBy: 'A', updatedAt: Date.now() });
-                added++;
-              }
-            }
-          }
-          if (added > 0) { setTransactions(prev => [...newTxs, ...prev]); showToast(`${added} importados!`); }
-        }; reader.readAsText(file); e.target.value = '';
-      };
-
       const generateAIReport = () => {
         const r = []; const bal = totals.inc - totals.exp; const sr = totals.inc > 0 ? (bal / totals.inc) * 100 : 0;
-        if (totals.inc === 0) r.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda', text: 'Cadastre o seu salário na aba Sync & Config.' });
-        else if (totals.exp > totals.inc) r.push({ type: 'danger', icon: '🚨', title: 'Gastos Excedentes', text: `Gastou ${formatMoney(Math.abs(bal))} a mais do que ganhou.` });
-        else if (sr >= 20) r.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Poupou ${sr.toFixed(1)}% da sua renda.` });
-        else r.push({ type: 'warning', icon: '📉', title: 'Atenção à Poupança', text: `Reteve apenas ${sr.toFixed(1)}%.` });
+        if (totals.inc === 0) r.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda', text: 'Cadastre salários na aba Sync.' });
+        else if (totals.exp > totals.inc) r.push({ type: 'danger', icon: '🚨', title: 'Gastos Excedentes', text: `Gastou ${formatMoney(Math.abs(bal))} a mais.` });
+        else if (sr >= 20) r.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Poupou ${sr.toFixed(1)}% da renda.` });
+        else r.push({ type: 'warning', icon: '📉', title: 'Atenção', text: `Reteve apenas ${sr.toFixed(1)}%.` });
         const cats = Object.entries(categoriesTotal).sort((a,b)=>b[1].val - a[1].val);
-        if (cats.length > 0) r.push({ type: 'info', icon: '💡', title: `Maior Foco: ${cats[0][0]}`, text: `Representa ${((cats[0][1].val / totals.exp)*100).toFixed(1)}% das despesas.` });
+        if (cats.length > 0) r.push({ type: 'info', icon: '💡', title: `Maior Foco: ${cats[0][0]}`, text: `${((cats[0][1].val / totals.exp)*100).toFixed(1)}% das despesas.` });
         return r;
       };
 
-      if (!isLoaded) return <div className="min-h-screen flex items-center justify-center text-brand-500 font-bold text-xl animate-pulse">A Iniciar Motores...</div>;
+      if (!isLoaded) return <div className="min-h-screen flex items-center justify-center text-brand-500 font-bold text-xl animate-pulse">Carregando Finanças DMX...</div>;
+
+      const inputClass = "w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300 text-sm";
+      const labelClass = "block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
 
       return (
-        <div className="flex flex-col md:flex-row min-h-screen">
-          <nav className="glass-card md:w-64 flex-shrink-0 md:h-screen md:sticky top-0 z-40 p-4 md:p-6 flex md:flex-col justify-between order-last md:order-first fixed bottom-0 left-0 right-0 border-t md:border-t-0 md:border-r border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col md:flex-row min-h-screen relative">
+          {/* Sidebar */}
+          <nav className="glass-card md:w-72 flex-shrink-0 md:h-screen md:sticky top-0 z-50 p-6 flex md:flex-col justify-between order-last md:order-first fixed bottom-0 left-0 right-0 border-t md:border-t-0 md:border-r border-white/40 dark:border-white/5">
             <div className="flex flex-col h-full w-full overflow-y-auto custom-scrollbar">
               <div className="hidden md:flex items-center gap-3 mb-10">
-                <img src="https://i.imgur.com/rLLYQ3Z.png" alt="Logo Finanças DMX" className="w-12 h-12 object-contain drop-shadow-md" />
-                <div><h1 className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-brand-400">Finanças DMX</h1><p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Enterprise</p></div>
+                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-brand-500/20">D</div>
+                <div><h1 className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">Finanças DMX</h1><p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">Enterprise</p></div>
               </div>
-              <div className="flex md:flex-col justify-around md:justify-start gap-2 flex-1">
+              <div className="flex md:flex-col justify-around md:justify-start gap-1 md:gap-2 flex-1">
                 {[{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'transactions', icon: '💸', label: 'Transações' }, { id: 'subscriptions', icon: '🔁', label: 'Assinaturas' }, { id: 'installments', icon: '💳', label: 'Parcelas' }, { id: 'goals', icon: '🎯', label: 'Metas' }, { id: 'budgets', icon: '💰', label: 'Orçamentos' }, { id: 'sync', icon: '☁️', label: 'Sync & Config' }].map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col md:flex-row items-center md:justify-start gap-1 md:gap-4 px-3 md:px-5 py-2 md:py-3 rounded-2xl transition-all duration-300 font-bold text-xs md:text-sm ${activeTab === tab.id ? 'bg-brand-500 text-white shadow-lg transform md:translate-x-2' : 'text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-800'}`} aria-current={activeTab === tab.id ? 'page' : undefined}>
-                    <span className="text-xl md:text-2xl drop-shadow-sm" aria-hidden="true">{tab.icon}</span><span className="hidden md:inline">{tab.label}</span>
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col md:flex-row items-center md:justify-start gap-3 px-4 py-3 rounded-2xl transition-all duration-300 font-semibold text-xs md:text-sm ${activeTab === tab.id ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-lg transform md:translate-x-1' : 'text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'}`} aria-current={activeTab === tab.id ? 'page' : undefined}>
+                    <span className="text-lg md:text-xl" aria-hidden="true">{tab.icon}</span><span className="hidden md:inline">{tab.label}</span>
                   </button>
                 ))}
               </div>
             </div>
           </nav>
 
-          <main className="flex-1 p-4 md:p-10 pb-24 md:pb-10 max-h-screen overflow-y-auto custom-scrollbar">
+          {/* Main Content */}
+          <main className="flex-1 p-4 md:p-10 pb-28 md:pb-10 max-h-screen overflow-y-auto custom-scrollbar">
             <header className="md:hidden flex items-center justify-between mb-8 px-2">
-              <div className="flex items-center gap-3"><img src="https://i.imgur.com/rLLYQ3Z.png" alt="Logo" className="w-8 h-8 object-contain" /><h1 className="font-extrabold text-xl bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-brand-400">Finanças DMX</h1></div>
-              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-slate-200 dark:bg-slate-800 rounded-full" aria-label="Alternar tema claro/escuro">{theme === 'dark' ? '☀️' : '🌙'}</button>
+              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-sm">D</div><h1 className="font-extrabold text-lg tracking-tight">Finanças DMX</h1></div>
+              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-slate-200 dark:bg-slate-800 rounded-full" aria-label="Alternar tema">{theme === 'dark' ? '☀️' : '🌙'}</button>
             </header>
 
-            <div className="max-w-6xl mx-auto space-y-8 pb-10">
-              <div className="flex flex-wrap items-center justify-between gap-4 glass-card p-4 rounded-3xl">
-                <label htmlFor="monthFilter" className="sr-only">Filtrar por mês</label>
-                <input id="monthFilter" type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-transparent font-bold text-lg outline-none cursor-pointer [color-scheme:light] dark:[color-scheme:dark]" />
-                <div className="text-right"><p className="text-[10px] text-slate-500 uppercase font-bold tracking-widest">Saldo Mensal Total</p><p className={`text-2xl font-black ${totals.balance >= 0 ? 'text-brand-500' : 'text-rose-500'}`}>{formatMoney(totals.balance)}</p></div>
+            <div className="max-w-6xl mx-auto space-y-8 pb-10 animate-fade-in">
+              {/* Header Filter */}
+              <div className="flex flex-wrap items-center justify-between gap-4 glass-card p-5 rounded-3xl">
+                <div className="flex items-center gap-3">
+                  <label htmlFor="monthFilter" className="sr-only">Filtrar por mês</label>
+                  <input id="monthFilter" type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-transparent font-bold text-lg outline-none cursor-pointer text-slate-700 dark:text-slate-200" />
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em] mb-1">Saldo Mensal</p>
+                  <p className={`text-3xl font-black tracking-tight ${totals.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.balance)}</p>
+                </div>
               </div>
 
+              {/* === DASHBOARD === */}
               {activeTab === 'dashboard' && (
-                <div className="space-y-8 animate-in fade-in">
+                <div className="space-y-6 animate-slide-up">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <BentoCard className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white border-none" title="Acerto de Contas" icon="🤝">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                        <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-sm"><p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p><p className="text-xl font-black">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p></div>
+                        <div className="p-4 bg-brand-500/20 rounded-2xl backdrop-blur-sm"><p className="text-[10px] text-brand-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameA}</p><p className="text-xl font-black text-brand-300">{(splitLogic.ratioA * 100).toFixed(1)}%</p></div>
+                        <div className="p-4 bg-partner-500/20 rounded-2xl backdrop-blur-sm"><p className="text-[10px] text-partner-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameB}</p><p className="text-xl font-black text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p></div>
+                      </div>
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-black/20 rounded-2xl border border-white/5">
+                        <div><p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gastos Conjuntos</p><p className="text-3xl font-black mt-1">{formatMoney(splitLogic.totalJointExp)}</p></div>
+                        <div className="text-center md:text-right">
+                          {splitLogic.balanceA > 0 ? <div className="text-emerald-400"><span className="text-sm font-medium">A receber de {settings.nameB}</span><br/><span className="text-3xl font-black">{formatMoney(splitLogic.balanceA)}</span></div>
+                          : splitLogic.balanceB > 0 ? <div className="text-rose-400"><span className="text-sm font-medium">A pagar para {settings.nameB}</span><br/><span className="text-3xl font-black">{formatMoney(splitLogic.balanceB)}</span></div>
+                          : <div className="text-slate-300 text-lg font-bold">Contas saldadas! ✅</div>}
+                        </div>
+                      </div>
+                    </BentoCard>
+
+                    <BentoCard title="Resumo" icon="📈">
+                      <div className="space-y-4">
+                        <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800">
+                          <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Receitas Totais</p>
+                          <p className="text-2xl font-black text-brand-700 dark:text-brand-300">{formatMoney(totals.inc)}</p>
+                        </div>
+                        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800">
+                          <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Despesas Totais</p>
+                          <p className="text-2xl font-black text-rose-700 dark:text-rose-300">{formatMoney(totals.exp)}</p>
+                        </div>
+                      </div>
+                    </BentoCard>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <BentoCard title="Onde gastou?" icon="🍩">
+                      <DonutChart categoriesTotal={categoriesTotal} />
+                    </BentoCard>
+                    <BentoCard title="Evolução (6 meses)" icon="📊">
+                      <EvolutionChart transactions={transactions} settings={settings} />
+                    </BentoCard>
+                  </div>
+
                   <div className="flex justify-end">
-                    <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-xl font-bold transition-all shadow-lg ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white hover:scale-105'}`} aria-expanded={showAI}><span>✨</span> Analisar Finanças com IA</button>
+                    <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-lg ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white hover:scale-105 shadow-partner-500/25'}`}>
+                      <span>✨</span> {showAI ? 'Ocultar Análise IA' : 'Analisar Finanças com IA'}
+                    </button>
                   </div>
 
                   {showAI && (
-                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-xl border border-blue-500/30">
+                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-xl border border-blue-500/20 animate-slide-up">
                       <h3 className="font-extrabold text-xl mb-6 flex items-center gap-2"><span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-partner-500">Relatório de Inteligência</span></h3>
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {generateAIReport().map((r, idx) => {
-                          const bgColors = { success: 'bg-emerald-100/50 dark:bg-emerald-900/20', warning: 'bg-amber-100/50 dark:bg-amber-900/20', danger: 'bg-rose-100/50 dark:bg-rose-900/20', info: 'bg-blue-100/50 dark:bg-blue-900/20' };
-                          const textColors = { success: 'text-emerald-800 dark:text-emerald-400', warning: 'text-amber-800 dark:text-amber-400', danger: 'text-rose-800 dark:text-rose-400', info: 'text-blue-800 dark:text-blue-400' };
+                          const styles = { 
+                            success: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400', 
+                            warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-400', 
+                            danger: 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-400', 
+                            info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-400' 
+                          };
                           return (
-                            <div key={idx} className={`p-5 rounded-2xl border ${bgColors[r.type]} border-white/10`}>
-                              <h4 className={`font-bold mb-2 flex items-center gap-2 ${textColors[r.type]}`}><span aria-hidden="true">{r.icon}</span> {r.title}</h4>
-                              <p className="text-sm text-slate-700 dark:text-slate-300 font-medium">{r.text}</p>
+                            <div key={idx} className={`p-5 rounded-2xl border ${styles[r.type]}`}>
+                              <h4 className="font-bold mb-2 flex items-center gap-2"><span>{r.icon}</span> {r.title}</h4>
+                              <p className="text-sm font-medium opacity-90">{r.text}</p>
                             </div>
                           );
                         })}
                       </div>
                     </div>
                   )}
-
-                  <div className="glass-card p-6 md:p-8 rounded-3xl shadow-lg border-t-4 border-t-partner-500">
-                    <h2 className="font-extrabold text-xl mb-4">🤝 Acerto de Contas do Casal</h2>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-                      <div className="p-4 bg-slate-100 dark:bg-slate-800/50 rounded-2xl"><p className="text-xs font-bold text-slate-500 uppercase">Renda Total</p><p className="text-xl font-black">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p></div>
-                      <div className="p-4 bg-brand-50 dark:bg-brand-900/20 rounded-2xl"><p className="text-xs font-bold text-brand-600 uppercase">Peso {settings.nameA}</p><p className="text-xl font-black text-brand-600">{(splitLogic.ratioA * 100).toFixed(1)}%</p></div>
-                      <div className="p-4 bg-partner-50 dark:bg-partner-900/20 rounded-2xl"><p className="text-xs font-bold text-partner-600 uppercase">Peso {settings.nameB}</p><p className="text-xl font-black text-partner-600">{(splitLogic.ratioB * 100).toFixed(1)}%</p></div>
-                    </div>
-                    <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-slate-800 dark:bg-slate-900 text-white rounded-2xl">
-                      <div><p className="text-xs text-slate-400 font-bold uppercase">Gastos Conjuntos</p><p className="text-3xl font-black">{formatMoney(splitLogic.totalJointExp)}</p></div>
-                      <div className="text-center md:text-right">
-                        {splitLogic.balanceA > 0 ? (
-                          <div className="text-emerald-400"><span className="text-sm">A receber de {settings.nameB}:</span><br/><span className="text-2xl font-black">{formatMoney(splitLogic.balanceA)}</span></div>
-                        ) : splitLogic.balanceB > 0 ? (
-                          <div className="text-rose-400"><span className="text-sm">A pagar para {settings.nameB}:</span><br/><span className="text-2xl font-black">{formatMoney(splitLogic.balanceB)}</span></div>
-                        ) : <div className="text-slate-400 text-lg font-bold">Contas saldadas!</div>}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="glass-card p-6 rounded-3xl shadow-sm border-t-4 border-t-brand-500"><h3 className="text-xs font-bold uppercase">Receitas Totais</h3><div className="text-3xl font-black">{formatMoney(totals.inc)}</div><p className="text-xs text-brand-500 mt-2">Salários + Extras.</p></div>
-                    <div className="glass-card p-6 rounded-3xl shadow-sm border-t-4 border-t-rose-500"><h3 className="text-xs font-bold uppercase">Despesas</h3><div className="text-3xl font-black text-rose-500">{formatMoney(totals.exp)}</div><p className="text-xs text-rose-400 mt-2">Conjuntas e Individuais.</p></div>
-                  </div>
-                  
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="glass-card p-8 rounded-3xl">
-                      <h3 className="font-extrabold text-lg mb-6"><span className="text-brand-500">Onde</span> gastou?</h3>
-                      <DonutChart categoriesTotal={categoriesTotal} />
-                    </div>
-                    <div className="glass-card p-8 rounded-3xl flex flex-col">
-                      <h3 className="font-extrabold text-lg mb-2"><span className="text-brand-500">Evolução</span> Financeira</h3>
-                      <p className="text-xs text-slate-500 font-medium mb-4">Últimos 6 meses.</p>
-                      <div className="flex-1">
-                        <EvolutionChart transactions={transactions} settings={settings} />
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
 
+              {/* === TRANSACTIONS === */}
               {activeTab === 'transactions' && (
-                <div className="space-y-6 animate-in fade-in">
-                  {/* MELHORIA 2: Uso de tag <form> com onSubmit */}
-                  <form onSubmit={handleSaveTx} className="glass-card p-8 rounded-3xl border-t-4 border-t-brand-500">
-                    <h3 className="font-extrabold text-xl mb-6">{txForm.id ? 'Editar Transação' : 'Registar Transação'}</h3>
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveTx} className="glass-card p-6 md:p-8 rounded-3xl">
+                    <h3 className="font-extrabold text-xl mb-6">{txForm.id ? 'Editar Transação' : 'Nova Transação'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                      <div>
-                        <label htmlFor="tx-desc" className="sr-only">Descrição</label>
-                        <input id="tx-desc" type="text" value={txForm.desc} onChange={e=>setTxForm({...txForm, desc: e.target.value})} className={`w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none ${formErrors.tx.desc ? 'field-error' : ''}`} placeholder="Descrição" required />
-                        {formErrors.tx.desc && <div className="error-message">{formErrors.tx.desc}</div>}
+                      <div className="md:col-span-2">
+                        <label htmlFor="tx-desc" className={labelClass}>Descrição</label>
+                        <input id="tx-desc" type="text" value={txForm.desc} onChange={e=>setTxForm({...txForm, desc: e.target.value})} className={`${inputClass} ${formErrors.tx.desc ? 'field-error' : ''}`} placeholder="Ex: Supermercado" required />
+                        {formErrors.tx.desc && <div className="error-message">⚠️ {formErrors.tx.desc}</div>}
                       </div>
                       <div>
-                        <label htmlFor="tx-value" className="sr-only">Valor</label>
-                        <input id="tx-value" type="number" step="0.01" value={txForm.value} onChange={e=>setTxForm({...txForm, value: e.target.value})} className={`w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none ${formErrors.tx.value ? 'field-error' : ''}`} placeholder="Valor (R$)" required />
-                        {formErrors.tx.value && <div className="error-message">{formErrors.tx.value}</div>}
+                        <label htmlFor="tx-value" className={labelClass}>Valor (R$)</label>
+                        <input id="tx-value" type="number" step="0.01" value={txForm.value} onChange={e=>setTxForm({...txForm, value: e.target.value})} className={`${inputClass} ${formErrors.tx.value ? 'field-error' : ''}`} placeholder="0,00" required />
+                        {formErrors.tx.value && <div className="error-message">⚠️ {formErrors.tx.value}</div>}
                       </div>
                       <div>
-                        <label htmlFor="tx-category" className="sr-only">Categoria</label>
-                        <select id="tx-category" value={txForm.category} onChange={e=>setTxForm({...txForm, category: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none">
+                        <label htmlFor="tx-category" className={labelClass}>Categoria</label>
+                        <select id="tx-category" value={txForm.category} onChange={e=>setTxForm({...txForm, category: e.target.value})} className={inputClass}>
                           {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                       <div>
-                        <label htmlFor="tx-type" className="sr-only">Tipo</label>
-                        <select id="tx-type" value={txForm.type} onChange={e=>setTxForm({...txForm, type: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none">
+                        <label htmlFor="tx-type" className={labelClass}>Tipo</label>
+                        <select id="tx-type" value={txForm.type} onChange={e=>setTxForm({...txForm, type: e.target.value})} className={inputClass}>
                           <option value="expense">Despesa</option><option value="income">Receita Extra</option>
                         </select>
                       </div>
                       <div>
-                        <label htmlFor="tx-scope" className="sr-only">Escopo</label>
-                        <select id="tx-scope" value={txForm.scope} onChange={e=>setTxForm({...txForm, scope: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none">
-                          <option value="joint">Despesa Conjunta</option><option value="A">Ind. {settings.nameA}</option><option value="B">Ind. {settings.nameB}</option>
+                        <label htmlFor="tx-date" className={labelClass}>Data</label>
+                        <input id="tx-date" type="date" value={txForm.date} onChange={e=>setTxForm({...txForm, date: e.target.value})} className={inputClass} required />
+                      </div>
+                      <div>
+                        <label htmlFor="tx-scope" className={labelClass}>Escopo</label>
+                        <select id="tx-scope" value={txForm.scope} onChange={e=>setTxForm({...txForm, scope: e.target.value})} className={inputClass}>
+                          <option value="joint">Despesa Conjunta</option><option value="A">Individual: {settings.nameA}</option><option value="B">Individual: {settings.nameB}</option>
                         </select>
                       </div>
                       {txForm.scope === 'joint' && (
                         <div>
-                          <label htmlFor="tx-paidBy" className="sr-only">Pago por</label>
-                          <select id="tx-paidBy" value={txForm.paidBy} onChange={e=>setTxForm({...txForm, paidBy: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none">
-                            <option value="A">Pago por: {settings.nameA}</option><option value="B">Pago por: {settings.nameB}</option>
+                          <label htmlFor="tx-paidBy" className={labelClass}>Pago por</label>
+                          <select id="tx-paidBy" value={txForm.paidBy} onChange={e=>setTxForm({...txForm, paidBy: e.target.value})} className={inputClass}>
+                            <option value="A">{settings.nameA}</option><option value="B">{settings.nameB}</option>
                           </select>
                         </div>
                       )}
-                      <div>
-                        <label htmlFor="tx-date" className="sr-only">Data</label>
-                        <input id="tx-date" type="date" value={txForm.date} onChange={e=>setTxForm({...txForm, date: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800 rounded-xl outline-none [color-scheme:light] dark:[color-scheme:dark]" required />
-                      </div>
-                      <div className="col-span-full md:col-span-2 flex gap-2 mt-2">
+                      <div className="col-span-full flex gap-3 mt-2">
                         {txForm.id && <button type="button" onClick={()=>{setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'joint', paidBy: 'A' }); setFormErrors(prev => ({...prev, tx: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">Cancelar</button>}
-                        <button type="submit" className="flex-1 bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-brand-600 transition-colors">Salvar Transação</button>
+                        <button type="submit" className="flex-1 bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 hover:shadow-brand-500/40 hover:-translate-y-0.5 transition-all">Salvar Transação</button>
                       </div>
                     </div>
                   </form>
                   
-                  <div className="glass-card p-8 rounded-3xl">
-                    <h3 className="font-extrabold text-xl mb-6">Lista do Mês ({monthFilter})</h3>
+                  <BentoCard title={`Registos de ${monthFilter}`}>
                     <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-500">Sem registos.</p> : filteredTransactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (
-                        <div key={t.id} className="flex justify-between items-center p-4 rounded-xl bg-white/50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 transition-colors group">
+                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400">Nenhum registo neste mês.</p> : filteredTransactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (
+                        <div key={t.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
                           <div>
-                            <p className="font-bold flex items-center gap-2">{t.desc} {t.autoType && <span className="text-[10px] bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase font-black">AUTO</span>}</p>
-                            <p className="text-xs text-slate-500 mt-1">{t.category} &bull; {t.date.split('-').reverse().join('/')} &bull; <span className="uppercase text-[10px] font-bold bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded">{t.scope==='joint'?'CONJUNTA':t.scope}</span></p>
+                            <p className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">{t.desc} {t.autoType && <span className="text-[9px] bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase font-black tracking-wider">Auto</span>}</p>
+                            <p className="text-xs text-slate-500 mt-1">{t.category} &bull; {t.date.split('-').reverse().join('/')} &bull; <span className="uppercase text-[9px] font-bold bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">{t.scope==='joint'?'Conjunta':t.scope}</span></p>
                           </div>
                           <div className="flex items-center gap-4">
-                            <span className={`font-black text-lg ${t.type==='income'?'text-brand-500':'text-slate-800 dark:text-white'}`}>{t.type==='income'?'+':'-'}{formatMoney(t.value)}</span>
+                            <span className={`font-black text-lg ${t.type==='income'?'text-brand-600 dark:text-brand-400':'text-slate-800 dark:text-white'}`}>{t.type==='income'?'+':'-'}{formatMoney(t.value)}</span>
                             <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-                              <button type="button" onClick={()=>setTxForm(t)} className="p-2 bg-slate-200 hover:bg-brand-500 hover:text-white dark:bg-slate-700 rounded-lg" aria-label="Editar transação">✏️</button>
-                              <button type="button" onClick={()=>handleDelete('tx', t.id)} className="p-2 bg-slate-200 hover:bg-rose-500 hover:text-white dark:bg-slate-700 rounded-lg" aria-label="Excluir transação">🗑️</button>
+                              <button type="button" onClick={()=>setTxForm(t)} className="p-2 bg-slate-200 hover:bg-brand-500 hover:text-white dark:bg-slate-700 rounded-lg transition-colors" aria-label="Editar">✏️</button>
+                              <button type="button" onClick={()=>handleDelete('tx', t.id)} className="p-2 bg-slate-200 hover:bg-rose-500 hover:text-white dark:bg-slate-700 rounded-lg transition-colors" aria-label="Excluir">🗑️</button>
                             </div>
                           </div>
                         </div>
                       ))}
                     </div>
-                  </div>
+                  </BentoCard>
                 </div>
               )}
 
-              {/* As outras abas (subscriptions, installments, goals, budgets, sync) seguem o EXATO mesmo padrão de <form onSubmit>, <label className="sr-only"> e separação de erros. Por brevidade, mantive a estrutura idêntica aplicada acima. */}
-              {/* Para fins de resposta, o código está completo e funcional com essas regras aplicadas em todos os formulários. */}
-              
-              {/* Exemplo rápido de como ficou a aba de Orçamentos com a MELHORIA 3 (Metadados Desacoplados): */}
-              {activeTab === 'budgets' && (
-                <div className="space-y-6 animate-in fade-in">
-                  <form onSubmit={(e) => {
-                    e.preventDefault();
-                    const lim = parseFloat(budgetForm.limit); 
-                    if(isNaN(lim)||lim<=0) { setFormErrors(prev => ({...prev, budget: {limit: 'Valor inválido'}})); return; }
-                    setBudgets(prev => ({ ...prev, [budgetForm.category]: lim })); 
-                    setBudgetsMeta({ updatedAt: Date.now() });
-                    setBudgetForm({ category: 'Alimentação', limit: '' }); 
-                    setFormErrors(prev => ({...prev, budget: {}}));
-                    showToast("Orçamento salvo.");
-                  }} className="glass-card p-8 rounded-3xl border-t-4 border-t-brand-500">
-                    <h3 className="font-extrabold text-xl mb-6">Orçamentos Mensais</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
-                      <div>
-                        <label htmlFor="budget-cat" className="sr-only">Categoria</label>
-                        <select id="budget-cat" value={budgetForm.category} onChange={e=>setBudgetForm({...budgetForm, category: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none">
-                          {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
-                        </select>
+              {/* === SUBSCRIPTIONS === */}
+              {activeTab === 'subscriptions' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveSub} className="glass-card p-6 md:p-8 rounded-3xl">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                      <h3 className="font-extrabold text-xl">{subForm.id ? 'Editar Assinatura' : 'Nova Assinatura Fixa'}</h3>
+                      <div className="mt-4 md:mt-0 px-4 py-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl border border-rose-200 dark:border-rose-800">
+                        <p className="text-[10px] text-rose-600 dark:text-rose-400 font-bold uppercase tracking-wider mb-1">Custo Fixo Mensal</p>
+                        <p className="font-black text-rose-700 dark:text-rose-300 text-lg">{formatMoney(totalSubscriptions)}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
+                      <div className="lg:col-span-2">
+                        <label htmlFor="sub-desc" className={labelClass}>Serviço</label>
+                        <input id="sub-desc" type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className={`${inputClass} ${formErrors.sub.desc ? 'field-error' : ''}`} placeholder="Ex: Netflix, Spotify" required />
+                        {formErrors.sub.desc && <div className="error-message">⚠️ {formErrors.sub.desc}</div>}
                       </div>
                       <div>
-                        <label htmlFor="budget-limit" className="sr-only">Limite Máximo</label>
-                        <input id="budget-limit" type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none ${formErrors.budget.limit ? 'field-error' : ''}`} placeholder="Limite (R$)" required />
-                        {formErrors.budget.limit && <div className="error-message">{formErrors.budget.limit}</div>}
+                        <label htmlFor="sub-value" className={labelClass}>Valor (R$)</label>
+                        <input id="sub-value" type="number" step="0.01" value={subForm.value} onChange={e=>setSubForm({...subForm, value: e.target.value})} className={`${inputClass} ${formErrors.sub.value ? 'field-error' : ''}`} placeholder="0,00" required />
+                        {formErrors.sub.value && <div className="error-message">⚠️ {formErrors.sub.value}</div>}
                       </div>
-                      <button type="submit" className="bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg hover:bg-brand-600 transition-colors">Definir Orçamento</button>
+                      <div>
+                        <label htmlFor="sub-day" className={labelClass}>Dia Venc.</label>
+                        <input id="sub-day" type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.sub.dayOfMonth ? 'field-error' : ''} text-center`} required />
+                        {formErrors.sub.dayOfMonth && <div className="error-message">⚠️ {formErrors.sub.dayOfMonth}</div>}
+                      </div>
+                      <div className="col-span-full flex justify-end gap-3 mt-2">
+                        {subForm.id && <button type="button" onClick={()=>{setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 }); setFormErrors(prev => ({...prev, sub: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Salvar</button>
+                      </div>
                     </div>
                   </form>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Object.keys(budgets).length === 0 ? <div className="col-span-full text-center py-10 text-slate-500">Sem orçamentos definidos.</div> : Object.entries(budgets).map(([cat, limit]) => {
-                      const spent = categoriesTotal[cat]?.val || 0; const pct = Math.min(100, (spent / limit) * 100); const isOver = spent > limit;
+                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhuma assinatura cadastrada.</div> : subscriptions.map(s => (
+                      <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-300 ${s.active ? 'hover:-translate-y-1 hover:shadow-xl' : 'opacity-60 grayscale-[0.5]'}`}>
+                        <div className="flex justify-between items-start mb-6">
+                          <div><h4 className="font-extrabold text-lg text-slate-800 dark:text-white">{s.desc}</h4><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p></div>
+                          <div className="flex gap-1">
+                            <button onClick={()=>setSubForm(s)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">✏️</button>
+                            <button onClick={()=>handleDelete('sub', s.id)} className="p-2 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 rounded-lg transition-colors">🗑️</button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-end mb-6">
+                          <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Valor</p><p className="font-black text-2xl text-slate-800 dark:text-white">{formatMoney(s.value)}</p></div>
+                          <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Dia</p><p className="font-black text-xl text-brand-500">{s.dayOfMonth}</p></div>
+                        </div>
+                        <button onClick={()=>setSubscriptions(prev=>prev.map(x=>x.id===s.id?{...x,active:!x.active,updatedAt:Date.now()}:x))} className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-lg shadow-brand-500/25'}`}>{s.active ? 'Pausar' : 'Reativar'}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* === INSTALLMENTS === */}
+              {activeTab === 'installments' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveInst} className="glass-card p-6 md:p-8 rounded-3xl">
+                    <h3 className="font-extrabold text-xl mb-6">{instForm.id ? 'Editar Parcelamento' : 'Novo Parcelamento'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
+                      <div className="lg:col-span-2">
+                        <label htmlFor="inst-desc" className={labelClass}>Descrição da Compra</label>
+                        <input id="inst-desc" type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} placeholder="Ex: iPhone 15" required />
+                        {formErrors.inst.desc && <div className="error-message">⚠️ {formErrors.inst.desc}</div>}
+                      </div>
+                      <div>
+                        <label htmlFor="inst-val" className={labelClass}>Valor Parcela (R$)</label>
+                        <input id="inst-val" type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} placeholder="0,00" required />
+                        {formErrors.inst.installmentValue && <div className="error-message">⚠️ {formErrors.inst.installmentValue}</div>}
+                      </div>
+                      <div>
+                        <label htmlFor="inst-tot" className={labelClass}>Total Parcelas</label>
+                        <input id="inst-tot" type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className={`${inputClass} ${formErrors.inst.totalInstallments ? 'field-error' : ''} text-center`} required />
+                        {formErrors.inst.totalInstallments && <div className="error-message">⚠️ {formErrors.inst.totalInstallments}</div>}
+                      </div>
+                      <div>
+                        <label htmlFor="inst-paid" className={labelClass}>Já Pagas</label>
+                        <input id="inst-paid" type="number" min="0" value={instForm.paidInstallments} onChange={e=>setInstForm({...instForm, paidInstallments: e.target.value})} className={`${inputClass} text-center`} />
+                      </div>
+                      <div>
+                        <label htmlFor="inst-day" className={labelClass}>Dia Venc.</label>
+                        <input id="inst-day" type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.inst.dayOfMonth ? 'field-error' : ''} text-center`} required />
+                        {formErrors.inst.dayOfMonth && <div className="error-message">⚠️ {formErrors.inst.dayOfMonth}</div>}
+                      </div>
+                      <div className="col-span-full flex justify-end gap-3 mt-2">
+                        {instForm.id && <button type="button" onClick={()=>{setInstForm({id:null,desc:'',installmentValue:'',paidInstallments:0,totalInstallments:2,dayOfMonth:1,category:'Dívidas'}); setFormErrors(prev => ({...prev, inst: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Salvar</button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {installments.length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhum parcelamento ativo.</div> : installments.map(i => {
+                      const cur = Math.min(i.paidInstallments || 0, i.totalInstallments);
+                      const pct = i.totalInstallments > 0 ? (cur / i.totalInstallments) * 100 : 0;
                       return (
-                        <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between shadow-sm">
+                        <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all duration-300 ${i.active ? 'hover:-translate-y-1 hover:shadow-xl' : 'opacity-70'}`}>
+                          <div className="flex justify-between items-start mb-4">
+                            <h4 className="font-extrabold text-lg text-slate-800 dark:text-white">{i.desc}</h4>
+                            <div className="flex gap-1">
+                              <button onClick={()=>setInstForm(i)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">✏️</button>
+                              <button onClick={()=>handleDelete('inst', i.id)} className="p-2 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 rounded-lg transition-colors">🗑️</button>
+                            </div>
+                          </div>
+                          <div className="mb-5">
+                            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>Progresso: {cur}/{i.totalInstallments}</span><span>{pct.toFixed(0)}%</span></div>
+                            <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${i.active ? 'bg-gradient-to-r from-brand-400 to-brand-600' : 'bg-emerald-500'}`} style={{width: `${pct}%`}}></div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-end">
+                            <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Parcela</p><p className="font-black text-xl text-slate-800 dark:text-white">{formatMoney(i.installmentValue)}</p><p className="text-[10px] text-slate-500 font-medium mt-1">Total: {formatMoney(i.installmentValue * i.totalInstallments)}</p></div>
+                            <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Venc.</p><p className="font-black text-lg text-brand-500">Dia {i.dayOfMonth}</p></div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* === GOALS === */}
+              {activeTab === 'goals' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveGoal} className="glass-card p-6 md:p-8 rounded-3xl">
+                    <h3 className="font-extrabold text-xl mb-6">{goalForm.id ? 'Atualizar Meta' : 'Nova Meta Financeira'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
+                      <div className="md:col-span-1">
+                        <label htmlFor="goal-name" className={labelClass}>Objetivo</label>
+                        <input id="goal-name" type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className={`${inputClass} ${formErrors.goal.name ? 'field-error' : ''}`} placeholder="Ex: Viagem" required />
+                        {formErrors.goal.name && <div className="error-message">⚠️ {formErrors.goal.name}</div>}
+                      </div>
+                      <div>
+                        <label htmlFor="goal-target" className={labelClass}>Alvo (R$)</label>
+                        <input id="goal-target" type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className={`${inputClass} ${formErrors.goal.target ? 'field-error' : ''}`} placeholder="0,00" required />
+                        {formErrors.goal.target && <div className="error-message">⚠️ {formErrors.goal.target}</div>}
+                      </div>
+                      <div>
+                        <label htmlFor="goal-current" className={labelClass}>Já Guardado (R$)</label>
+                        <input id="goal-current" type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className={inputClass} placeholder="0,00" />
+                      </div>
+                      <div className="col-span-full flex gap-3 justify-end mt-2">
+                        {goalForm.id && <button type="button" onClick={()=>{setGoalForm({id:null,name:'',target:'',current:'0'}); setFormErrors(prev => ({...prev, goal: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Salvar Meta</button>
+                      </div>
+                    </div>
+                  </form>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {goals.length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhuma meta registada.</div> : goals.map(g => {
+                      const pct = Math.min(100, (g.current / g.target) * 100);
+                      return (
+                        <div key={g.id} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
                           <div>
-                            <div className="flex justify-between items-start mb-2"><h3 className="font-extrabold text-lg">{cat}</h3><button type="button" onClick={()=>{const b={...budgets}; delete b[cat]; setBudgets(b); setBudgetsMeta({ updatedAt: Date.now() });}} className="p-2 text-slate-400 hover:text-rose-500" aria-label="Remover orçamento de {cat}">🗑️</button></div>
-                            <p className="text-sm font-medium mb-4">Gasto: {formatMoney(spent)} / {formatMoney(limit)}</p>
+                            <div className="flex justify-between items-start mb-3">
+                              <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{g.name}</h3>
+                              <div className="flex gap-1">
+                                <button onClick={()=>setGoalForm(g)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">✏️</button>
+                                <button onClick={()=>handleDelete('goal', g.id)} className="p-2 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 rounded-lg transition-colors">🗑️</button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium mb-4"><span className="font-bold text-slate-700 dark:text-slate-300 text-base">{formatMoney(g.current)}</span> de {formatMoney(g.target)}</p>
                           </div>
                           <div>
-                            <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2"><div className={`h-full transition-all duration-1000 ${isOver ? 'bg-rose-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }}></div></div>
-                            <div className={`text-right text-[10px] font-black ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>{pct.toFixed(1)}% UTILIZADO</div>
-                            {isOver && <div className="mt-2 text-rose-500 text-xs font-bold">⚠️ Limite ultrapassado!</div>}
+                            <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
+                              <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000 ease-out rounded-full" style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <div className="text-right text-[10px] font-black text-brand-500 tracking-wider">{pct.toFixed(1)}% CONCLUÍDO</div>
                           </div>
                         </div>
                       );
@@ -682,14 +837,142 @@
                 </div>
               )}
 
-              {/* Nota: As abas 'subscriptions', 'installments', 'goals' e 'sync' foram atualizadas internamente com a mesma lógica de <form onSubmit>, <label className="sr-only"> e estado de erros separado para manter a consistência e brevidade da resposta. */}
+              {/* === BUDGETS === */}
+              {activeTab === 'budgets' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={(e) => {
+                    e.preventDefault();
+                    const lim = parseFloat(budgetForm.limit); 
+                    if(isNaN(lim)||lim<=0) { setFormErrors(prev => ({...prev, budget: {limit: 'Valor inválido'}})); return; }
+                    setBudgets(prev => ({ ...prev, [budgetForm.category]: lim })); 
+                    setBudgetsMeta({ updatedAt: Date.now() });
+                    setBudgetForm({ category: 'Alimentação', limit: '' }); 
+                    setFormErrors(prev => ({...prev, budget: {}}));
+                    showToast("Orçamento definido.");
+                  }} className="glass-card p-6 md:p-8 rounded-3xl">
+                    <h3 className="font-extrabold text-xl mb-6">Orçamentos Mensais</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
+                      <div>
+                        <label htmlFor="budget-cat" className={labelClass}>Categoria</label>
+                        <select id="budget-cat" value={budgetForm.category} onChange={e=>setBudgetForm({...budgetForm, category: e.target.value})} className={inputClass}>
+                          {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor="budget-limit" className={labelClass}>Limite Máximo (R$)</label>
+                        <input id="budget-limit" type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`${inputClass} ${formErrors.budget.limit ? 'field-error' : ''}`} placeholder="0,00" required />
+                        {formErrors.budget.limit && <div className="error-message">⚠️ {formErrors.budget.limit}</div>}
+                      </div>
+                      <button type="submit" className="bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Definir Orçamento</button>
+                    </div>
+                  </form>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {Object.keys(budgets).length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhum orçamento definido.</div> : Object.entries(budgets).map(([cat, limit]) => {
+                      const spent = categoriesTotal[cat]?.val || 0; const pct = Math.min(100, (spent / limit) * 100); const isOver = spent > limit;
+                      return (
+                        <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                          <div>
+                            <div className="flex justify-between items-start mb-3">
+                              <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{cat}</h3>
+                              <button type="button" onClick={()=>{const b={...budgets}; delete b[cat]; setBudgets(b); setBudgetsMeta({ updatedAt: Date.now() });}} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" aria-label="Remover">🗑️</button>
+                            </div>
+                            <p className="text-sm font-medium mb-4 text-slate-600 dark:text-slate-300">Gasto: <span className="font-bold">{formatMoney(spent)}</span> / {formatMoney(limit)}</p>
+                          </div>
+                          <div>
+                            <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isOver ? 'bg-rose-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <div className={`text-right text-[10px] font-black tracking-wider ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>{pct.toFixed(1)}% UTILIZADO</div>
+                            {isOver && <div className="mt-2 text-rose-500 text-xs font-bold flex items-center gap-1">⚠️ Limite ultrapassado!</div>}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* === SYNC & CONFIG === */}
+              {activeTab === 'sync' && (
+                <div className="space-y-6 animate-slide-up">
+                  <BentoCard title="Configurações do Casal" icon="👥" className="border-t-4 border-t-emerald-500">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <h3 className="font-bold mb-4 text-brand-600 flex items-center gap-2">👤 {settings.nameA || 'Pessoa A'}</h3>
+                        <label className={labelClass}>Nome</label>
+                        <input type="text" value={settings.nameA} onChange={e=>setSettings({...settings, nameA: e.target.value, updatedAt: Date.now()})} className={`${inputClass} mb-4 font-bold`} placeholder="Nome" />
+                        <label className={labelClass}>Salário Mensal (R$)</label>
+                        <input type="number" step="0.01" value={settings.salaryA} onChange={e=>setSettings({...settings, salaryA: e.target.value, updatedAt: Date.now()})} className={inputClass} placeholder="0,00" />
+                      </div>
+                      <div className="p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
+                        <h3 className="font-bold mb-4 text-partner-600 flex items-center gap-2">👤 {settings.nameB || 'Pessoa B'}</h3>
+                        <label className={labelClass}>Nome</label>
+                        <input type="text" value={settings.nameB} onChange={e=>setSettings({...settings, nameB: e.target.value, updatedAt: Date.now()})} className={`${inputClass} mb-4 font-bold`} placeholder="Nome" />
+                        <label className={labelClass}>Salário Mensal (R$)</label>
+                        <input type="number" step="0.01" value={settings.salaryB} onChange={e=>setSettings({...settings, salaryB: e.target.value, updatedAt: Date.now()})} className={inputClass} placeholder="0,00" />
+                      </div>
+                    </div>
+                  </BentoCard>
+
+                  <BentoCard title="Sync Seguro (AES-GCM & CRDT)" icon="🔒" className="border-t-4 border-t-brand-500">
+                    <p className="text-sm text-slate-500 mb-6 leading-relaxed">Os dados são encriptados ponta-a-ponta. Definam a <strong>MESMA senha</strong> nos dois dispositivos para fundir os dados com segurança militar.</p>
+                    <div className="max-w-md mb-6">
+                      <label className={labelClass}>Senha Secreta do Casal</label>
+                      <input type="password" value={syncPassword} onChange={e=>setSyncPassword(e.target.value)} className={`${inputClass} font-mono tracking-widest`} placeholder="••••••••" />
+                    </div>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <button onClick={handleGenerateSyncCode} className="bg-brand-500 text-white font-bold py-4 rounded-xl hover:bg-brand-600 transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 hover:-translate-y-0.5">1. Gerar Código e Copiar</button>
+                      <div className="flex flex-col gap-3">
+                        <label className={labelClass}>Código do Parceiro</label>
+                        <textarea value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)} className={`${inputClass} h-16 text-xs font-mono resize-none`} placeholder="Cole o código criptografado aqui..."></textarea>
+                        <button onClick={handleImportSyncCode} className="bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:-translate-y-0.5">2. Descriptografar & Fundir</button>
+                      </div>
+                    </div>
+                  </BentoCard>
+
+                  <BentoCard className="flex flex-col md:flex-row gap-6 items-center justify-between">
+                    <div>
+                      <h3 className="font-bold text-lg mb-1 flex items-center gap-2">📁 Dados Tradicionais (CSV)</h3>
+                      <p className="text-xs text-slate-500">Exporte para Excel ou importe o seu histórico manualmente.</p>
+                    </div>
+                    <div className="flex gap-4">
+                      <button onClick={handleExportCSV} className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all hover:-translate-y-0.5">Exportar</button>
+                      <label className="bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600 font-bold py-3 px-6 rounded-xl cursor-pointer shadow-md transition-all hover:-translate-y-0.5 flex items-center gap-2">
+                        📥 Importar <input type="file" accept=".csv" onChange={(e) => {
+                          const file = e.target.files[0]; if (!file) return;
+                          const reader = new FileReader();
+                          reader.onload = (evt) => {
+                            const lines = evt.target.result.split(/\r?\n/); let added = 0; const newTxs = [];
+                            for (let i = 1; i < lines.length; i++) {
+                              if (!lines[i].trim()) continue;
+                              const columns = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+                              if (columns.length >= 5) {
+                                const [date, type, category, desc, value] = columns.map(c => c.trim().replace(/^"|"$/g, ''));
+                                if (date && value && !isNaN(parseFloat(value))) {
+                                  newTxs.push({ id: generateId(), date, type: type === 'income' ? 'income' : 'expense', category, desc, value: parseFloat(value), scope: 'joint', paidBy: 'A', updatedAt: Date.now() });
+                                  added++;
+                                }
+                              }
+                            }
+                            if (added > 0) { setTransactions(prev => [...newTxs, ...prev]); showToast(`${added} importados!`); }
+                          }; reader.readAsText(file); e.target.value = '';
+                        }} className="hidden" />
+                      </label>
+                    </div>
+                  </BentoCard>
+                </div>
+              )}
 
             </div>
           </main>
           
-          <div className="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none" aria-live="polite">
+          {/* Toasts */}
+          <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none" aria-live="polite">
             {toasts.map(t => (
-              <div key={t.id} className={`px-4 py-3 rounded-xl shadow-xl font-bold text-sm bg-white dark:bg-slate-800 border-l-4 ${t.isError ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-brand-500 text-brand-600 dark:text-brand-400'}`}>
+              <div key={t.id} className={`px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm bg-white dark:bg-slate-800 border-l-4 animate-slide-up flex items-center gap-3 ${t.isError ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-brand-500 text-brand-600 dark:text-brand-400'}`}>
+                <span className="text-lg">{t.isError ? '⚠️' : '✅'}</span>
                 {t.msg}
               </div>
             ))}
