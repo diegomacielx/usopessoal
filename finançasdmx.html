@@ -115,7 +115,7 @@
       const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '', current: '0' });
       const [budgetForm, setBudgetForm] = useState({ category: 'Alimentação', limit: '' });
       const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
-      const [instForm, setInstForm] = useState({ id: null, desc: '', totalValue: '', currentInstallment: 1, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
+      const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
 
       // --- Persistência ---
       useEffect(() => {
@@ -203,18 +203,24 @@
 
         // Processa Parcelamentos
         const nextInsts = installments.map(inst => {
-          if (!inst.active || inst.currentInstallment > inst.totalInstallments) return inst;
+          const paid = inst.paidInstallments !== undefined ? parseInt(inst.paidInstallments) : (inst.currentInstallment ? inst.currentInstallment - 1 : 0);
+          const total = parseInt(inst.totalInstallments);
+          const isActive = inst.active !== false && paid < total;
+
+          if (!isActive) return inst;
           
           const targetDay = Math.min(inst.dayOfMonth, maxDaysInMonth);
           const autoTxId = `inst_${inst.id}_${currentMonthStr}`;
           const alreadyBilled = transactions.some(t => t.id === autoTxId);
 
           if (!alreadyBilled && currentDay >= targetDay) {
-            const parcelValue = parseFloat(inst.totalValue) / parseInt(inst.totalInstallments);
-            newTxs.push({ id: autoTxId, desc: `${inst.desc} (${inst.currentInstallment}/${inst.totalInstallments})`, value: parcelValue, type: 'expense', category: inst.category || 'Dívidas', date: `${currentMonthStr}-${String(targetDay).padStart(2, '0')}`, autoType: 'installment' });
+            const parcelValue = inst.installmentValue ? parseFloat(inst.installmentValue) : (parseFloat(inst.totalValue) / total);
+            const currentNumber = paid + 1;
+            
+            newTxs.push({ id: autoTxId, desc: `${inst.desc} (${currentNumber}/${total})`, value: parcelValue, type: 'expense', category: inst.category || 'Dívidas', date: `${currentMonthStr}-${String(targetDay).padStart(2, '0')}`, autoType: 'installment' });
             
             instsUpdated = true;
-            return { ...inst, currentInstallment: inst.currentInstallment + 1, active: inst.currentInstallment < inst.totalInstallments };
+            return { ...inst, paidInstallments: paid + 1, active: (paid + 1) < total };
           }
           return inst;
         });
@@ -343,21 +349,21 @@
       };
 
       const handleSaveInst = () => {
-        const totalVal = parseFloat(instForm.totalValue);
+        const instVal = parseFloat(instForm.installmentValue);
         const totalInst = parseInt(instForm.totalInstallments);
-        const curInst = parseInt(instForm.currentInstallment);
+        const paid = parseInt(instForm.paidInstallments);
         const day = parseInt(instForm.dayOfMonth);
         
-        if (!instForm.desc.trim() || isNaN(totalVal) || totalVal <= 0 || isNaN(totalInst) || totalInst < 2 || isNaN(curInst) || curInst < 1 || curInst > totalInst) {
+        if (!instForm.desc.trim() || isNaN(instVal) || instVal <= 0 || isNaN(totalInst) || totalInst < 2 || isNaN(paid) || paid < 0 || paid > totalInst) {
           return showToast("Preencha os dados do parcelamento corretamente.", true);
         }
 
         if (instForm.id) {
-          setInstallments(prev => prev.map(i => i.id === instForm.id ? { ...instForm, totalValue: totalVal, totalInstallments: totalInst, currentInstallment: curInst, dayOfMonth: day, active: curInst <= totalInst } : i));
+          setInstallments(prev => prev.map(i => i.id === instForm.id ? { ...instForm, installmentValue: instVal, totalInstallments: totalInst, paidInstallments: paid, dayOfMonth: day, active: paid < totalInst } : i));
         } else {
-          setInstallments(prev => [...prev, { ...instForm, id: generateId(), totalValue: totalVal, totalInstallments: totalInst, currentInstallment: curInst, dayOfMonth: day, active: curInst <= totalInst }]);
+          setInstallments(prev => [...prev, { ...instForm, id: generateId(), installmentValue: instVal, totalInstallments: totalInst, paidInstallments: paid, dayOfMonth: day, active: paid < totalInst }]);
         }
-        setInstForm({ id: null, desc: '', totalValue: '', currentInstallment: 1, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
+        setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
         showToast("Parcelamento salvo.");
       };
 
@@ -854,23 +860,23 @@
                         <input type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Valor Total (R$)</label>
-                        <input type="number" step="0.01" value={instForm.totalValue} onChange={e=>setInstForm({...instForm, totalValue: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" placeholder="Ex: 3000.00" />
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Valor da Parcela (R$)</label>
+                        <input type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium" placeholder="Ex: 189.01" />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Qtd. Parcelas (Ex: 12)</label>
                         <input type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium text-center" />
                       </div>
                       <div>
-                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Já pagas (Ex: 2)</label>
-                        <input type="number" min="0" value={instForm.currentInstallment - 1} onChange={e=>setInstForm({...instForm, currentInstallment: parseInt(e.target.value) + 1})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium text-center" />
+                        <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Já pagas (Ex: 0)</label>
+                        <input type="number" min="0" value={instForm.paidInstallments} onChange={e=>setInstForm({...instForm, paidInstallments: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium text-center" />
                       </div>
                       <div>
                         <label className="block text-[10px] font-bold text-slate-500 mb-2 uppercase tracking-widest">Vencimento</label>
                         <input type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className="w-full px-5 py-3 bg-slate-100 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-brand-500 font-medium text-center" />
                       </div>
                       <div className="lg:col-span-6 flex justify-end gap-3 mt-4">
-                        {instForm.id && <button onClick={()=>setInstForm({id:null,desc:'',totalValue:'',currentInstallment:1,totalInstallments:2,dayOfMonth:1,category:'Dívidas'})} className="px-8 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
+                        {instForm.id && <button onClick={()=>setInstForm({id:null,desc:'',installmentValue:'',paidInstallments:0,totalInstallments:2,dayOfMonth:1,category:'Dívidas'})} className="px-8 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
                         <button onClick={handleSaveInst} className="bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 px-10 rounded-xl transition-all shadow-lg shadow-brand-500/30 active:scale-95">Salvar Parcelamento</button>
                       </div>
                     </div>
@@ -881,31 +887,35 @@
                       <div className="col-span-full text-center py-10 text-slate-500 font-medium bg-slate-100/50 dark:bg-slate-800/30 rounded-2xl">Sem parcelamentos ativos.</div>
                     ) : (
                       installments.map(i => {
-                        const cur = Math.min(i.currentInstallment, i.totalInstallments);
-                        const pct = (cur / i.totalInstallments) * 100;
-                        const parcelValue = parseFloat(i.totalValue) / parseInt(i.totalInstallments);
+                        const paid = i.paidInstallments !== undefined ? parseInt(i.paidInstallments) : (i.currentInstallment ? i.currentInstallment - 1 : 0);
+                        const total = parseInt(i.totalInstallments);
+                        const pct = (paid / total) * 100;
+                        const parcelValue = i.installmentValue ? parseFloat(i.installmentValue) : (parseFloat(i.totalValue) / total);
+                        const totalDebt = parcelValue * total;
+
                         return (
-                          <div key={i.id} className={`glass-card p-6 rounded-3xl border-2 transition-all ${i.active ? 'border-transparent shadow-md' : 'border-brand-500/50 opacity-80'}`}>
+                          <div key={i.id} className={`glass-card p-6 rounded-3xl border-2 transition-all ${i.active !== false && paid < total ? 'border-transparent shadow-md' : 'border-brand-500/50 opacity-80'}`}>
                             <div className="flex justify-between items-start mb-4">
                               <h4 className="font-extrabold text-lg">{i.desc}</h4>
                               <div className="flex gap-2">
-                                <button onClick={()=>setInstForm(i)} className="text-slate-400 hover:text-brand-500">✏️</button>
+                                <button onClick={()=>setInstForm({id: i.id, desc: i.desc, installmentValue: parcelValue, totalInstallments: total, paidInstallments: paid, dayOfMonth: i.dayOfMonth, category: i.category || 'Dívidas'})} className="text-slate-400 hover:text-brand-500">✏️</button>
                                 <button onClick={()=>setInstallments(prev=>prev.filter(x=>x.id!==i.id))} className="text-slate-400 hover:text-rose-500">🗑️</button>
                               </div>
                             </div>
                             <div className="mb-4">
                               <div className="flex justify-between text-xs font-bold text-slate-500 mb-2">
-                                <span>Progresso: {cur}/{i.totalInstallments}</span>
+                                <span>Já pagas: {paid}/{total}</span>
                                 <span>{pct.toFixed(0)}%</span>
                               </div>
                               <div className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                                <div className={`h-full transition-all duration-1000 ${i.active ? 'bg-brand-500' : 'bg-emerald-500'}`} style={{width: `${pct}%`}}></div>
+                                <div className={`h-full transition-all duration-1000 ${i.active !== false && paid < total ? 'bg-brand-500' : 'bg-emerald-500'}`} style={{width: `${pct}%`}}></div>
                               </div>
                             </div>
                             <div className="flex justify-between items-end">
                               <div>
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Valor Parcela</p>
                                 <p className="font-black text-xl text-slate-800 dark:text-white">{formatMoney(parcelValue)}</p>
+                                <p className="text-[10px] text-slate-500 font-medium mt-1">Total: {formatMoney(totalDebt)}</p>
                               </div>
                               <div className="text-right">
                                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Dia Venc.</p>
