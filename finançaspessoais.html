@@ -2071,17 +2071,28 @@
       const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
       const aPaid = a.lastPaidMonth === currentMonth;
       const bPaid = b.lastPaidMonth === currentMonth;
-      const aDue = calcNextDue(a.dayOfMonth);
-      const bDue = calcNextDue(b.dayOfMonth);
       
-      // 1º: Inativas vão para o final
+      // Conversão explícita para Number previne falhas de coerção de String na verificação do dia
+      const aDue = calcNextDue(Number(a.dayOfMonth));
+      const bDue = calcNextDue(Number(b.dayOfMonth));
+      
+      // 1º Nível: Inativas vão para o final absoluto da lista
       if (a.active !== b.active) return a.active ? -1 : 1;
-      // 2º: Pagas este mês vão para o final
+      
+      // 2º Nível: Pagas este mês vão para o final (ficando logo acima das inativas)
       if (aPaid !== bPaid) return aPaid ? 1 : -1;
-      // 3º: Atrasadas vêm primeiro
+      
+      // 3º Nível: Atrasadas possuem prioridade máxima de exibição no topo
       if (aDue.isLate !== bDue.isLate) return aDue.isLate ? -1 : 1;
-      // 4º: Ordena por proximidade (menos dias = primeiro)
-      return aDue.diffDays - bDue.diffDays;
+      
+      // 4º Nível: Desempate lógico dependendo do status do grupo
+      if (aDue.isLate) {
+        // Se ambas estão atrasadas: Ordena por MAIOR tempo de atraso primeiro (ordem decrescente)
+        return bDue.daysLate - aDue.daysLate;
+      } else {
+        // Se ambas estão a vencer: Ordena pelo MENOR tempo até a data de corte (ordem crescente)
+        return aDue.diffDays - bDue.diffDays;
+      }
     })
     .map((s, idx) => {
       const due = calcNextDue(s.dayOfMonth);
