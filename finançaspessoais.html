@@ -1207,31 +1207,29 @@
       );
     }
     
-// ==================== LEITOR DE QR CODE (NFC-e) ====================
+// ==================== LEITOR DE QR CODE (NFC-e e PIX) ====================
     const NFCeScanner = ({ onScanSuccess, onCancel }) => {
       const [errorMsg, setErrorMsg] = useState("");
 
       useEffect(() => {
-        // Utilizamos a classe base headless, sem a UI injetada da biblioteca
         const html5QrCode = new Html5Qrcode("qr-reader");
 
         const startScanner = async () => {
           try {
             await html5QrCode.start(
-              { facingMode: "environment" }, // Força a câmera traseira automaticamente
+              { facingMode: "environment" },
               {
-                fps: 10,
-                qrbox: { width: 250, height: 250 },
-                aspectRatio: 1.0 // Mantém a câmera quadrada
+                fps: 15,
+                // REMOVIDOS: qrbox e aspectRatio. 
+                // Assim a câmera usa a proporção nativa do celular e não distorce a imagem do QR Code.
               },
               (decodedText) => {
-                // Ao ler com sucesso, para a câmera e devolve o texto
                 html5QrCode.stop().then(() => {
                   onScanSuccess(decodedText);
                 }).catch(console.error);
               },
               (errorMessage) => {
-                // Falhas silenciosas de frame (ignoramos para não poluir o console)
+                // Falhas silenciosas de frame (ignoramos)
               }
             );
           } catch (err) {
@@ -1242,7 +1240,6 @@
 
         startScanner();
 
-        // Cleanup: Desliga a câmera se o usuário fechar o modal antes de ler
         return () => {
           if (html5QrCode.isScanning) {
             html5QrCode.stop().catch(console.error);
@@ -1252,11 +1249,11 @@
 
       return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-slate-900 p-6 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up border border-slate-700">
+          <div className="bg-slate-900 p-4 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up border border-slate-700 flex flex-col h-[85vh] md:h-auto">
             
-            <div className="text-center mb-6">
-              <h3 className="font-extrabold text-xl text-white mb-1">📸 Escanear NFC-e</h3>
-              <p className="text-xs text-slate-400 font-medium">Aponte a câmera traseira para o QR Code</p>
+            <div className="text-center mb-4 mt-2">
+              <h3 className="font-extrabold text-xl text-white mb-1">📸 Escanear Código</h3>
+              <p className="text-xs text-slate-400 font-medium">Aponte para o QR Code (PIX ou NFC-e)</p>
             </div>
             
             {errorMsg ? (
@@ -1264,19 +1261,19 @@
                 ⚠️ {errorMsg}
               </div>
             ) : (
-              <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-6 bg-black shadow-[0_0_30px_rgba(20,184,166,0.15)] border-2 border-brand-500/30">
-                {/* O vídeo da câmera será injetado exclusivamente aqui, sem botões de upload */}
-                <div id="qr-reader" className="w-full h-full object-cover"></div>
+              <div className="relative w-full flex-1 md:h-72 rounded-2xl overflow-hidden mb-6 bg-black shadow-[0_0_30px_rgba(20,184,166,0.15)] border-2 border-brand-500/30">
+                {/* O contêiner de vídeo sem restrições de CSS para manter a proporção da câmera */}
+                <div id="qr-reader" className="w-full h-full flex items-center justify-center"></div>
                 
-                {/* Mira visual para auxiliar o usuário */}
+                {/* Mira visual */}
                 <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="w-3/4 h-3/4 border-[3px] border-brand-500/80 rounded-3xl"></div>
+                  <div className="w-2/3 aspect-square border-[3px] border-brand-500/80 rounded-3xl"></div>
                   <div className="absolute w-full h-[2px] bg-brand-500/50 animate-pulse top-1/2 shadow-[0_0_10px_rgba(20,184,166,0.8)]"></div>
                 </div>
               </div>
             )}
             
-            <button onClick={onCancel} className="w-full py-4 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs">
+            <button onClick={onCancel} className="w-full py-4 mt-auto mb-2 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs shrink-0">
               Cancelar e Voltar
             </button>
           </div>
