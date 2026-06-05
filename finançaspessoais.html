@@ -159,7 +159,7 @@
       
       getUserData: async (userId) => {
         const doc = await db.collection('users').doc(userId).get();
-        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+        return doc.exists ? { ...doc.data(), id: doc.id } : null;
       },
       
       updateUser: async (userId, updates) => {
@@ -172,7 +172,7 @@
       getCoupleData: async (coupleId) => {
         if (!coupleId) return null;
         const doc = await db.collection('couples').doc(coupleId).get();
-        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+        return doc.exists ? { ...doc.data(), id: doc.id } : null;
       },
       
       updateCouple: async (coupleId, updates) => {
@@ -290,7 +290,7 @@
       getAllTransactions: async (userId, coupleId) => {
         const txs = [];
         const personalSnap = await db.collection('transactions').where('ownerId', '==', userId).get();
-        personalSnap.docs.forEach(doc => txs.push({ id: doc.id, ...doc.data() }));
+        personalSnap.docs.forEach(doc => txs.push({ ...doc.data(), id: doc.id }));
         
         if (coupleId) {
           const sharedSnap = await db.collection('transactions').where('coupleId', '==', coupleId).get();
@@ -329,7 +329,7 @@
       getCollection: async (collectionName, userId, coupleId) => {
         const items = [];
         const personalSnap = await db.collection(collectionName).where('ownerId', '==', userId).get();
-        personalSnap.docs.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
+        personalSnap.docs.forEach(doc => items.push({ ...doc.data(), id: doc.id }));
         
         if (coupleId) {
           const sharedSnap = await db.collection(collectionName).where('coupleId', '==', coupleId).get();
