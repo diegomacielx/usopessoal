@@ -112,18 +112,15 @@
 
     const predefinedCategories = ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Habitação', 'Educação', 'Vestuário', 'Pets', 'Assinaturas', 'Dívidas', 'Investimentos', 'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'];
 
-    // ==================== DATA SERVICE (QUERIES SIMPLIFICADAS - SEM ÍNDICES COMPOSTOS) ====================
+    // ==================== DATA SERVICE ====================
     const DataService = {
-      // Auth
       signUp: async (email, password, name) => {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
         await db.collection('users').doc(user.uid).set({
           email, name,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          mode: null,
-          coupleId: null,
-          partnerId: null,
+          mode: null, coupleId: null, partnerId: null,
           settings: { salary: 0, currency: 'BRL', nameInCouple: 'Pessoa A' }
         });
         return user;
@@ -135,7 +132,6 @@
       },
       
       signOut: async () => await auth.signOut(),
-      
       sendPasswordReset: async (email) => await auth.sendPasswordResetEmail(email),
       
       getUserData: async (userId) => {
@@ -163,7 +159,16 @@
         });
       },
       
-      // Criar casal (gera código)
+      // CORRIGIDO: Regenera código de convite para casal existente
+      regenerateInviteCode: async (coupleId) => {
+        const newCode = generateInviteCode();
+        await db.collection('couples').doc(coupleId).update({
+          inviteCode: newCode,
+          inviteCodeGeneratedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        return newCode;
+      },
+      
       createCouple: async (currentUser, partnerEmail, nameInCouple) => {
         const partnerQuery = await db.collection('users').where('email', '==', partnerEmail).limit(1).get();
         
@@ -205,7 +210,6 @@
         return { coupleId: coupleRef.id, partnerId, inviteCode };
       },
       
-      // Aceitar convite via código
       acceptInviteByCode: async (currentUser, inviteCode) => {
         const allCouples = await db.collection('couples').get();
         
@@ -221,7 +225,7 @@
         const coupleData = coupleDoc.data();
         
         if (coupleData.userB !== currentUser.uid) {
-          throw new Error('Este código não foi enviado para sua conta. Verifique se está logado com o email correto.');
+          throw new Error('Este código não foi enviado para sua conta.');
         }
         
         await db.collection('couples').doc(coupleDoc.id).update({
@@ -239,12 +243,10 @@
         return { coupleId: coupleDoc.id, partnerId: coupleData.userA };
       },
       
-      // Desfazer casal (voltar para solo)
       dissolveCouple: async (userId, coupleId) => {
         const coupleData = await DataService.getCoupleData(coupleId);
         if (!coupleData) return;
         
-        // Atualiza ambos os usuários para modo solo
         await db.collection('users').doc(coupleData.userA).update({
           mode: 'solo', coupleId: null, partnerId: null,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
@@ -254,45 +256,32 @@
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
-        // Transações compartilhadas viram pessoais do dono
         const sharedTxs = await db.collection('transactions').where('coupleId', '==', coupleId).get();
         for (const doc of sharedTxs.docs) {
           await doc.ref.update({ scope: 'private', coupleId: null });
         }
         
-        // Deleta o documento do casal
         await db.collection('couples').doc(coupleId).delete();
       },
       
-      // ==================== BUSCA SIMPLIFICADA (SEM ÍNDICES COMPOSTOS) ====================
-      
-      // Busca TODAS as transações do usuário (pessoais + compartilhadas)
+      // ==================== BUSCA DE DADOS ====================
       getAllTransactions: async (userId, coupleId) => {
         const txs = [];
-        
-        // Transações onde o usuário é dono
-        const personalSnap = await db.collection('transactions')
-          .where('ownerId', '==', userId)
-          .get();
+        const personalSnap = await db.collection('transactions').where('ownerId', '==', userId).get();
         personalSnap.docs.forEach(doc => txs.push({ id: doc.id, ...doc.data() }));
         
-        // Se em casal, busca transações compartilhadas (onde o casal é dono)
         if (coupleId) {
-          const sharedSnap = await db.collection('transactions')
-            .where('coupleId', '==', coupleId)
-            .get();
+          const sharedSnap = await db.collection('transactions').where('coupleId', '==', coupleId).get();
           sharedSnap.docs.forEach(doc => {
             const data = doc.data();
-            // Só adiciona se não for duplicata (usuário não é o dono)
-            if (data.ownerId !== userId) {
-              txs.push({ id: doc.id, ...data });
-            }
+            if (data.ownerId !== userId) txs.push({ id: doc.id, ...data });
           });
         }
         
         return txs.sort((a, b) => new Date(b.date) - new Date(a.date));
       },
       
+      // CORRIGIDO: addTransaction agora retorna o ID gerado
       addTransaction: async (txData) => {
         const docRef = await db.collection('transactions').add({
           ...txData,
@@ -303,51 +292,74 @@
       },
       
       updateTransaction: async (txId, updates) => {
+        if (!txId) throw new Error('ID da transação inválido');
         await db.collection('transactions').doc(txId).update({
           ...updates,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       },
       
+      // CORRIGIDO: Validação de ID antes de deletar
       deleteTransaction: async (txId) => {
+        if (!txId) throw new Error('ID da transação inválido');
         await db.collection('transactions').doc(txId).delete();
       },
       
-      // Busca coleção genérica (goals, subscriptions, installments)
       getCollection: async (collectionName, userId, coupleId) => {
         const items = [];
-        
-        const personalSnap = await db.collection(collectionName)
-          .where('ownerId', '==', userId)
-          .get();
+        const personalSnap = await db.collection(collectionName).where('ownerId', '==', userId).get();
         personalSnap.docs.forEach(doc => items.push({ id: doc.id, ...doc.data() }));
         
         if (coupleId) {
-          const sharedSnap = await db.collection(collectionName)
-            .where('coupleId', '==', coupleId)
-            .get();
+          const sharedSnap = await db.collection(collectionName).where('coupleId', '==', coupleId).get();
           sharedSnap.docs.forEach(doc => {
             const data = doc.data();
-            if (data.ownerId !== userId) {
-              items.push({ id: doc.id, ...data });
-            }
+            if (data.ownerId !== userId) items.push({ id: doc.id, ...data });
           });
         }
         
         return items;
       },
       
-      addGoal: async (data) => await db.collection('goals').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      updateGoal: async (id, data) => await db.collection('goals').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteGoal: async (id) => await db.collection('goals').doc(id).delete(),
+      // CORRIGIDO: add methods retornam o ID gerado
+      addGoal: async (data) => {
+        const docRef = await db.collection('goals').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        return docRef.id;
+      },
+      updateGoal: async (id, data) => {
+        if (!id) throw new Error('ID da meta inválido');
+        await db.collection('goals').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      },
+      deleteGoal: async (id) => {
+        if (!id) throw new Error('ID da meta inválido');
+        await db.collection('goals').doc(id).delete();
+      },
       
-      addSubscription: async (data) => await db.collection('subscriptions').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      updateSubscription: async (id, data) => await db.collection('subscriptions').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteSubscription: async (id) => await db.collection('subscriptions').doc(id).delete(),
+      addSubscription: async (data) => {
+        const docRef = await db.collection('subscriptions').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        return docRef.id;
+      },
+      updateSubscription: async (id, data) => {
+        if (!id) throw new Error('ID da assinatura inválido');
+        await db.collection('subscriptions').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      },
+      deleteSubscription: async (id) => {
+        if (!id) throw new Error('ID da assinatura inválido');
+        await db.collection('subscriptions').doc(id).delete();
+      },
       
-      addInstallment: async (data) => await db.collection('installments').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      updateInstallment: async (id, data) => await db.collection('installments').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteInstallment: async (id) => await db.collection('installments').doc(id).delete(),
+      addInstallment: async (data) => {
+        const docRef = await db.collection('installments').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        return docRef.id;
+      },
+      updateInstallment: async (id, data) => {
+        if (!id) throw new Error('ID do parcelamento inválido');
+        await db.collection('installments').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      },
+      deleteInstallment: async (id) => {
+        if (!id) throw new Error('ID do parcelamento inválido');
+        await db.collection('installments').doc(id).delete();
+      },
       
       getBudgets: async (ownerId) => {
         const snap = await db.collection('budgets').where('ownerId', '==', ownerId).get();
@@ -414,9 +426,7 @@
       return <AuthContext.Provider value={{ user, userData, coupleData, loading, signIn: DataService.signIn, signUp: DataService.signUp, signOut: DataService.signOut, sendPasswordReset: DataService.sendPasswordReset, refreshUserData }}>{children}</AuthContext.Provider>;
     }
 
-    function useAuth() {
-      return useContext(AuthContext);
-    }
+    function useAuth() { return useContext(AuthContext); }
 
     // ==================== COMPONENTES ====================
     const BentoCard = ({ children, className = "", title, icon, action }) => (
@@ -598,12 +608,12 @@
       );
     }
 
-    // ==================== ONBOARDING (FLUXO CORRIGIDO) ====================
+    // ==================== ONBOARDING ====================
     function OnboardingFlow() {
       const { user, userData, refreshUserData } = useAuth();
       const [step, setStep] = useState(1);
       const [mode, setMode] = useState('solo');
-      const [coupleAction, setCoupleAction] = useState(null); // 'create' | 'join'
+      const [coupleAction, setCoupleAction] = useState(null);
       const [partnerEmail, setPartnerEmail] = useState('');
       const [inviteCode, setInviteCode] = useState('');
       const [generatedCode, setGeneratedCode] = useState('');
@@ -626,7 +636,7 @@
         try {
           const result = await DataService.createCouple({ uid: user.uid, name: userData.name }, partnerEmail, nameInCouple);
           setGeneratedCode(result.inviteCode);
-          setStep(4); // Pula para tela do código gerado
+          setStep(4);
           await refreshUserData();
         } catch (err) { setError(err.message); }
         finally { setLoading(false); }
@@ -649,7 +659,6 @@
           
           <div className="glass-card p-8 md:p-10 rounded-3xl w-full max-w-lg shadow-2xl relative z-10 animate-slide-up">
             
-            {/* Passo 1: Escolher modo */}
             {step === 1 && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Olá, {userData?.name}! 👋</h2>
@@ -679,7 +688,6 @@
               </>
             )}
             
-            {/* Passo 2A: Solo */}
             {step === 2 && mode === 'solo' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Modo Solo 🧍</h2>
@@ -691,7 +699,6 @@
               </>
             )}
             
-            {/* Passo 2B: Casal - escolher criar ou entrar */}
             {step === 2 && mode === 'couple' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Modo Casal 👫</h2>
@@ -723,7 +730,6 @@
               </>
             )}
             
-            {/* Passo 3A: Criar casal (convidar) */}
             {step === 3 && coupleAction === 'create' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Convidar Parceiro(a) ✉️</h2>
@@ -756,7 +762,6 @@
               </>
             )}
             
-            {/* Passo 3B: Entrar em casal (digitar código) */}
             {step === 3 && coupleAction === 'join' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Aceitar Convite 🔑</h2>
@@ -778,7 +783,6 @@
               </>
             )}
             
-            {/* Passo 4: Código gerado com sucesso */}
             {step === 4 && (
               <>
                 <div className="text-center mb-8">
@@ -797,9 +801,10 @@
                   <p className="text-sm text-blue-800 dark:text-blue-300">
                     <strong>Próximos passos:</strong><br/>
                     1. Seu parceiro deve criar uma conta<br/>
-                    2. Ele escolhe "Modo Casal"<br/>
-                    3. Clica em "Recebi um código"<br/>
-                    4. Digita este código acima
+                    2. Vai em Configurações<br/>
+                    3. Clica em "Ativar Modo Casal"<br/>
+                    4. Clica em "Recebi um código"<br/>
+                    5. Digita este código acima
                   </p>
                 </div>
                 
@@ -814,7 +819,135 @@
       );
     }
 
-    // ==================== APP PRINCIPAL ====================
+    // ==================== MODAL MIGRAÇÃO PARA CASAL ====================
+    function MigrateToCoupleModal({ onClose, onSuccess }) {
+      const { user, userData } = useAuth();
+      const [step, setStep] = useState(1);
+      const [action, setAction] = useState(null);
+      const [partnerEmail, setPartnerEmail] = useState('');
+      const [inviteCode, setInviteCode] = useState('');
+      const [generatedCode, setGeneratedCode] = useState('');
+      const [nameInCouple, setNameInCouple] = useState('Pessoa A');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+      
+      const handleCreate = async () => {
+        if (!partnerEmail) { setError('Digite o email'); return; }
+        setError(''); setLoading(true);
+        try {
+          const result = await DataService.createCouple({ uid: user.uid, name: userData.name }, partnerEmail, nameInCouple);
+          setGeneratedCode(result.inviteCode);
+          setStep(3);
+        } catch (err) { setError(err.message); }
+        finally { setLoading(false); }
+      };
+      
+      const handleJoin = async () => {
+        if (inviteCode.length !== 6) { setError('Código deve ter 6 caracteres'); return; }
+        setError(''); setLoading(true);
+        try {
+          await DataService.acceptInviteByCode({ uid: user.uid }, inviteCode);
+          await onSuccess();
+          onClose();
+        } catch (err) { setError(err.message); }
+        finally { setLoading(false); }
+      };
+      
+      return (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+          <div className="glass-card p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto custom-scrollbar">
+            {step === 1 && (
+              <>
+                <h2 className="font-extrabold text-2xl mb-6">Migrar para Modo Casal 👫</h2>
+                <p className="text-slate-500 mb-6">Você vai convidar alguém ou aceitar um convite?</p>
+                
+                <div className="space-y-3 mb-6">
+                  <button onClick={() => { setAction('create'); setStep(2); }} className="w-full p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left">
+                    <div className="font-bold">✉️ Convidar parceiro(a)</div>
+                    <div className="text-sm text-slate-500">Gero um código para enviar</div>
+                  </button>
+                  <button onClick={() => { setAction('join'); setStep(2); }} className="w-full p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left">
+                    <div className="font-bold">🔑 Recebi um código</div>
+                    <div className="text-sm text-slate-500">Vou digitar o código</div>
+                  </button>
+                </div>
+                
+                <button onClick={onClose} className="w-full text-slate-500 hover:text-brand-500 font-medium py-2">Cancelar</button>
+              </>
+            )}
+            
+            {step === 2 && action === 'create' && (
+              <>
+                <h2 className="font-extrabold text-2xl mb-6">Convidar Parceiro(a)</h2>
+                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm">⚠️ {error}</div>}
+                
+                <div className="space-y-4 mb-6">
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email do parceiro(a)</label>
+                    <input type="email" value={partnerEmail} onChange={e => setPartnerEmail(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none" placeholder="parceiro@email.com" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seu nome no casal</label>
+                    <select value={nameInCouple} onChange={e => setNameInCouple(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none">
+                      <option value="Pessoa A">Pessoa A</option>
+                      <option value="Pessoa B">Pessoa B</option>
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex gap-3">
+                  <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-3 rounded-xl">Voltar</button>
+                  <button onClick={handleCreate} disabled={loading} className="flex-1 bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg">
+                    {loading ? 'Gerando...' : 'Gerar Código'}
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {step === 2 && action === 'join' && (
+              <>
+                <h2 className="font-extrabold text-2xl mb-6">Aceitar Convite</h2>
+                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm">⚠️ {error}</div>}
+                
+                <div className="mb-6">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Código de 6 caracteres</label>
+                  <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} maxLength="6" className="w-full px-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none text-center font-mono font-black text-2xl tracking-[0.5em]" placeholder="XXXXXX" />
+                </div>
+                
+                <div className="flex gap-3">
+                  <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-3 rounded-xl">Voltar</button>
+                  <button onClick={handleJoin} disabled={loading} className="flex-1 bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg">
+                    {loading ? 'Entrando...' : 'Entrar'}
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {step === 3 && (
+              <>
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-5xl">🎉</div>
+                  <h2 className="font-extrabold text-2xl mb-2">Casal criado!</h2>
+                  <p className="text-slate-500">Envie este código ao seu parceiro(a):</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 p-6 rounded-2xl border border-partner-200 dark:border-partner-800/50 mb-6 text-center">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Código de Convite</p>
+                  <div className="font-mono font-black text-4xl tracking-[0.3em] text-partner-600 dark:text-partner-400 mb-4">{generatedCode}</div>
+                  <button onClick={() => navigator.clipboard?.writeText(generatedCode)} className="text-sm bg-white dark:bg-slate-800 font-bold py-2 px-6 rounded-xl shadow-md">📋 Copiar</button>
+                </div>
+                
+                <button onClick={() => { onClose(); onSuccess(); }} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl shadow-lg">
+                  Concluir
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== DASHBOARD APP ====================
     function DashboardApp() {
       const { user, userData, coupleData, signOut, refreshUserData } = useAuth();
       const [activeTab, setActiveTab] = useState('dashboard');
@@ -831,13 +964,14 @@
       const [budgets, setBudgets] = useState({});
       const [subscriptions, setSubscriptions] = useState([]);
       const [installments, setInstallments] = useState([]);
+      const [partnerData, setPartnerData] = useState(null);
       const [loadingData, setLoadingData] = useState(true);
       
       const [txForm, setTxForm] = useState({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user?.uid });
       const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '', current: '0' });
       const [budgetForm, setBudgetForm] = useState({ category: 'Alimentação', limit: '' });
-      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
-      const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
+      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, scope: 'private' });
+      const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas', scope: 'private' });
       const [formErrors, setFormErrors] = useState({ tx: {}, goal: {}, budget: {}, sub: {}, inst: {} });
       
       const [settings, setSettings] = useState({ 
@@ -846,8 +980,11 @@
         nameB: 'Pessoa B',
       });
       
-      // Estado para modal de migração de modo
       const [showMigrateModal, setShowMigrateModal] = useState(false);
+      
+      // NOVO: Estado para modal de geração de novo código
+      const [showInviteCodeModal, setShowInviteCodeModal] = useState(false);
+      const [regeneratedCode, setRegeneratedCode] = useState('');
       
       const isCouple = userData?.mode === 'couple';
       
@@ -863,7 +1000,6 @@
         else document.documentElement.classList.remove('dark');
       }, [theme]);
       
-      // Carregar dados (QUERIES SIMPLIFICADAS - SEM ÍNDICES COMPOSTOS)
       useEffect(() => {
         const loadData = async () => {
           setLoadingData(true);
@@ -883,6 +1019,12 @@
             setSubscriptions(subs);
             setInstallments(insts);
             setBudgets(bdg);
+            
+            // Buscar dados do parceiro se em casal
+            if (isCouple && userData?.partnerId) {
+              const partner = await DataService.getUserData(userData.partnerId);
+              setPartnerData(partner);
+            }
             
             if (isCouple && coupleData?.settings) {
               setSettings({
@@ -935,6 +1077,22 @@
         [subscriptions]
       );
       
+      // NOVO: Assinaturas por escopo (pessoal vs compartilhada)
+      const subscriptionsByScope = useMemo(() => {
+        const mine = subscriptions.filter(s => s.ownerId === user.uid && s.active);
+        const partner = subscriptions.filter(s => s.ownerId !== user.uid && s.active);
+        const personal = subscriptions.filter(s => s.scope !== 'shared' && s.active);
+        const shared = subscriptions.filter(s => s.scope === 'shared' && s.active);
+        
+        return {
+          mine, partner, personal, shared,
+          mineTotal: mine.reduce((acc, curr) => acc + parseFloat(curr.value), 0),
+          partnerTotal: partner.reduce((acc, curr) => acc + parseFloat(curr.value), 0),
+          personalTotal: personal.reduce((acc, curr) => acc + parseFloat(curr.value), 0),
+          sharedTotal: shared.reduce((acc, curr) => acc + parseFloat(curr.value), 0),
+        };
+      }, [subscriptions, user.uid]);
+      
       const splitLogic = useMemo(() => {
         if (!isCouple) return null;
         const salA = parseFloat(settings.salaryA) || 0;
@@ -957,7 +1115,7 @@
         };
       }, [filteredTransactions, settings, isCouple, user.uid, userData?.partnerId]);
       
-      // Handlers
+      // CORRIGIDO: Handlers garantem ID consistente
       const handleSaveTx = async (e) => {
         e.preventDefault();
         const errors = {};
@@ -972,11 +1130,15 @@
           coupleId: txForm.scope === 'shared' ? userData.coupleId : null,
           category: txForm.customCategory.trim() || txForm.category,
           value: val,
+          paidBy: user.uid,
         };
         
         try {
-          if (txForm.id) await DataService.updateTransaction(txForm.id, payload);
-          else await DataService.addTransaction(payload);
+          if (txForm.id) {
+            await DataService.updateTransaction(txForm.id, payload);
+          } else {
+            await DataService.addTransaction(payload);
+          }
           
           const newTxs = await DataService.getAllTransactions(user.uid, userData.coupleId);
           setTransactions(newTxs);
@@ -991,11 +1153,27 @@
       };
       
       const handleDeleteTx = async (id) => {
-        if (!window.confirm("Apagar?")) return;
+        if (!id) {
+          showToast('Erro: ID inválido', true);
+          return;
+        }
+        if (!window.confirm("Apagar esta transação?")) return;
         try {
           await DataService.deleteTransaction(id);
           setTransactions(prev => prev.filter(t => t.id !== id));
-        } catch (err) { showToast('Erro', true, err.message); }
+          showToast("Transação excluída.");
+        } catch (err) { showToast('Erro ao excluir', true, err.message); }
+      };
+      
+      // CORRIGIDO: Meta - ao clicar em editar, preenche corretamente
+      const handleEditGoal = (g) => {
+        setGoalForm({
+          id: g.id,
+          name: g.name || '',
+          target: String(g.target || ''),
+          current: String(g.current || '0'),
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
       
       const handleSaveGoal = async (e) => {
@@ -1006,12 +1184,23 @@
         if (isNaN(target) || target <= 0) errors.target = 'Valor inválido';
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, goal: errors})); return; }
         
-        const payload = { ...goalForm, ownerId: user.uid, coupleId: userData.coupleId, scope: isCouple ? 'shared' : 'private', target, current: parseFloat(goalForm.current) || 0 };
+        const payload = { 
+          ...goalForm, 
+          ownerId: user.uid, 
+          coupleId: userData.coupleId, 
+          scope: isCouple ? 'shared' : 'private', 
+          target, 
+          current: parseFloat(goalForm.current) || 0 
+        };
         
         try {
-          if (goalForm.id) await DataService.updateGoal(goalForm.id, payload);
-          else await DataService.addGoal(payload);
-          setGoals(await DataService.getCollection('goals', user.uid, userData.coupleId));
+          if (goalForm.id) {
+            await DataService.updateGoal(goalForm.id, payload);
+          } else {
+            await DataService.addGoal(payload);
+          }
+          const newGoals = await DataService.getCollection('goals', user.uid, userData.coupleId);
+          setGoals(newGoals);
           setGoalForm({ id: null, name: '', target: '', current: '0' });
           setFormErrors(prev => ({...prev, goal: {}}));
           showToast("Meta salva.");
@@ -1019,11 +1208,25 @@
       };
       
       const handleDeleteGoal = async (id) => {
+        if (!id) { showToast('Erro: ID inválido', true); return; }
         if (!window.confirm("Apagar?")) return;
         try {
           await DataService.deleteGoal(id);
           setGoals(prev => prev.filter(g => g.id !== id));
         } catch (err) { showToast('Erro', true, err.message); }
+      };
+      
+      // CORRIGIDO: Sub - editar preenche corretamente, inclui categoria e scope
+      const handleEditSub = (s) => {
+        setSubForm({
+          id: s.id,
+          desc: s.desc || '',
+          value: String(s.value || ''),
+          category: s.category || 'Assinaturas',
+          dayOfMonth: s.dayOfMonth || 1,
+          scope: s.scope || 'private',
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
       
       const handleSaveSub = async (e) => {
@@ -1034,13 +1237,25 @@
         if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, sub: errors})); return; }
         
-        const payload = { ...subForm, ownerId: user.uid, coupleId: userData.coupleId, scope: isCouple ? 'shared' : 'private', value: val, dayOfMonth: parseInt(subForm.dayOfMonth), active: true };
+        const payload = { 
+          ...subForm, 
+          ownerId: user.uid, 
+          coupleId: subForm.scope === 'shared' ? userData.coupleId : null, 
+          value: val, 
+          dayOfMonth: parseInt(subForm.dayOfMonth), 
+          active: subForm.id ? true : true,
+          category: subForm.category,
+        };
         
         try {
-          if (subForm.id) await DataService.updateSubscription(subForm.id, payload);
-          else await DataService.addSubscription(payload);
-          setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId));
-          setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
+          if (subForm.id) {
+            await DataService.updateSubscription(subForm.id, payload);
+          } else {
+            await DataService.addSubscription(payload);
+          }
+          const newSubs = await DataService.getCollection('subscriptions', user.uid, userData.coupleId);
+          setSubscriptions(newSubs);
+          setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, scope: 'private' });
           setFormErrors(prev => ({...prev, sub: {}}));
           showToast("Assinatura salva.");
         } catch (err) { showToast('Erro', true, err.message); }
@@ -1054,11 +1269,27 @@
       };
       
       const handleDeleteSub = async (id) => {
+        if (!id) { showToast('Erro: ID inválido', true); return; }
         if (!window.confirm("Apagar?")) return;
         try {
           await DataService.deleteSubscription(id);
           setSubscriptions(prev => prev.filter(s => s.id !== id));
         } catch (err) { showToast('Erro', true, err.message); }
+      };
+      
+      // CORRIGIDO: Installment - editar preenche, inclui paidInstallments
+      const handleEditInst = (i) => {
+        setInstForm({
+          id: i.id,
+          desc: i.desc || '',
+          installmentValue: String(i.installmentValue || ''),
+          paidInstallments: i.paidInstallments || 0,
+          totalInstallments: i.totalInstallments || 2,
+          dayOfMonth: i.dayOfMonth || 1,
+          category: i.category || 'Dívidas',
+          scope: i.scope || 'private',
+        });
+        window.scrollTo({ top: 0, behavior: 'smooth' });
       };
       
       const handleSaveInst = async (e) => {
@@ -1072,19 +1303,34 @@
         if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, inst: errors})); return; }
         
         const paid = parseInt(instForm.paidInstallments) || 0;
-        const payload = { ...instForm, ownerId: user.uid, coupleId: userData.coupleId, scope: isCouple ? 'shared' : 'private', installmentValue: val, totalInstallments: tot, paidInstallments: paid, dayOfMonth: parseInt(instForm.dayOfMonth), active: paid < tot };
+        const payload = { 
+          ...instForm, 
+          ownerId: user.uid, 
+          coupleId: instForm.scope === 'shared' ? userData.coupleId : null, 
+          installmentValue: val, 
+          totalInstallments: tot, 
+          paidInstallments: paid, 
+          dayOfMonth: parseInt(instForm.dayOfMonth), 
+          active: paid < tot,
+          category: instForm.category,
+        };
         
         try {
-          if (instForm.id) await DataService.updateInstallment(instForm.id, payload);
-          else await DataService.addInstallment(payload);
-          setInstallments(await DataService.getCollection('installments', user.uid, userData.coupleId));
-          setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
+          if (instForm.id) {
+            await DataService.updateInstallment(instForm.id, payload);
+          } else {
+            await DataService.addInstallment(payload);
+          }
+          const newInsts = await DataService.getCollection('installments', user.uid, userData.coupleId);
+          setInstallments(newInsts);
+          setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas', scope: 'private' });
           setFormErrors(prev => ({...prev, inst: {}}));
           showToast("Parcelamento salvo.");
         } catch (err) { showToast('Erro', true, err.message); }
       };
       
       const handleDeleteInst = async (id) => {
+        if (!id) { showToast('Erro: ID inválido', true); return; }
         if (!window.confirm("Apagar?")) return;
         try {
           await DataService.deleteInstallment(id);
@@ -1123,18 +1369,21 @@
         } catch (err) { showToast('Erro', true, err.message); }
       };
       
-      // MIGRAÇÃO DE MODO: Solo → Casal
-      const handleMigrateToCouple = async () => {
-        setShowMigrateModal(true);
-      };
-      
-      // MIGRAÇÃO DE MODO: Casal → Solo
       const handleMigrateToSolo = async () => {
-        if (!window.confirm("Tem certeza? Seu parceiro também voltará para o modo solo. Transações compartilhadas se tornarão pessoais.")) return;
+        if (!window.confirm("Tem certeza? Seu parceiro também voltará para o modo solo.")) return;
         try {
           await DataService.dissolveCouple(user.uid, userData.coupleId);
           await refreshUserData();
           showToast("Você voltou para o Modo Solo.");
+        } catch (err) { showToast('Erro', true, err.message); }
+      };
+      
+      // NOVO: Regenerar código de convite
+      const handleRegenerateCode = async () => {
+        try {
+          const newCode = await DataService.regenerateInviteCode(userData.coupleId);
+          setRegeneratedCode(newCode);
+          setShowInviteCodeModal(true);
         } catch (err) { showToast('Erro', true, err.message); }
       };
       
@@ -1146,6 +1395,11 @@
         else if (totals.exp > totals.inc) r.push({ type: 'danger', icon: '🚨', title: 'Gastos Excedentes', text: `Gastou ${formatMoney(Math.abs(bal))} a mais.` });
         else if (sr >= 20) r.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Poupou ${sr.toFixed(1)}% da renda.` });
         else r.push({ type: 'warning', icon: '📉', title: 'Atenção', text: `Reteve ${sr.toFixed(1)}%.` });
+        
+        if (totalSubscriptions > 0) {
+          const subPct = totals.exp > 0 ? (totalSubscriptions / totals.exp) * 100 : 0;
+          r.push({ type: 'info', icon: '🔁', title: 'Assinaturas', text: `${formatMoney(totalSubscriptions)} em custos fixos (${subPct.toFixed(1)}% das despesas).` });
+        }
         
         const cats = Object.entries(categoriesTotal).sort((a,b)=>b[1].val - a[1].val);
         if (cats.length > 0) r.push({ type: 'info', icon: '💡', title: `Foco: ${cats[0][0]}`, text: `${((cats[0][1].val / totals.exp)*100).toFixed(1)}% das despesas.` });
@@ -1213,6 +1467,7 @@
                 </div>
               </div>
               
+              {/* DASHBOARD */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6 animate-slide-up">
                   {isCouple && splitLogic && (
@@ -1265,6 +1520,61 @@
                     </div>
                   )}
                   
+                  {/* NOVO: Card de Assinaturas no Dashboard */}
+                  <BentoCard title="Assinaturas Ativas" icon="🔁" action={
+                    <button onClick={() => setActiveTab('subscriptions')} className="text-xs text-brand-500 hover:text-brand-600 font-bold uppercase tracking-wider">Ver todas →</button>
+                  }>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                      <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50">
+                        <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Custo Fixo Mensal</p>
+                        <p className="text-2xl font-black text-rose-700 dark:text-rose-300">{formatMoney(totalSubscriptions)}</p>
+                        <p className="text-[10px] text-rose-500 mt-1">{subscriptions.filter(s => s.active).length} assinatura(s) ativa(s)</p>
+                      </div>
+                      {isCouple ? (
+                        <>
+                          <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50">
+                            <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Minhas Assinaturas</p>
+                            <p className="text-2xl font-black text-brand-700 dark:text-brand-300">{formatMoney(subscriptionsByScope.mineTotal)}</p>
+                            <p className="text-[10px] text-brand-500 mt-1">{subscriptionsByScope.mine.length} assinatura(s)</p>
+                          </div>
+                          <div className="p-4 rounded-2xl bg-partner-50 dark:bg-partner-900/20 border border-partner-100 dark:border-partner-800/50">
+                            <p className="text-[10px] text-partner-600 dark:text-partner-400 uppercase font-bold tracking-wider mb-1">Assinaturas do(a) {partnerData?.name || 'Parceiro(a)'}</p>
+                            <p className="text-2xl font-black text-partner-700 dark:text-partner-300">{formatMoney(subscriptionsByScope.partnerTotal)}</p>
+                            <p className="text-[10px] text-partner-500 mt-1">{subscriptionsByScope.partner.length} assinatura(s)</p>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="md:col-span-2 p-4 rounded-2xl bg-amber-50 dark:bg-amber-900/20 border border-amber-100 dark:border-amber-800/50">
+                          <p className="text-[10px] text-amber-600 dark:text-amber-400 uppercase font-bold tracking-wider mb-1">Impacto Anual</p>
+                          <p className="text-2xl font-black text-amber-700 dark:text-amber-300">{formatMoney(totalSubscriptions * 12)}</p>
+                          <p className="text-[10px] text-amber-500 mt-1">Projeção de 12 meses</p>
+                        </div>
+                      )}
+                    </div>
+                    
+                    {/* Lista de assinaturas por categoria */}
+                    {subscriptions.filter(s => s.active).length > 0 && (
+                      <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
+                        {Object.entries(
+                          subscriptions.filter(s => s.active).reduce((acc, s) => {
+                            if (!acc[s.category]) acc[s.category] = { total: 0, count: 0 };
+                            acc[s.category].total += parseFloat(s.value);
+                            acc[s.category].count += 1;
+                            return acc;
+                          }, {})
+                        ).sort((a, b) => b[1].total - a[1].total).map(([cat, data]) => (
+                          <div key={cat} className="flex justify-between items-center text-sm p-2 rounded-lg hover:bg-slate-100/50 dark:hover:bg-slate-800/50">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-slate-700 dark:text-slate-200">{cat}</span>
+                              <span className="text-[10px] text-slate-500">{data.count}x</span>
+                            </div>
+                            <span className="font-bold">{formatMoney(data.total)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </BentoCard>
+                  
                   <div className="flex justify-end">
                     <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-xl hover:-translate-y-1 ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white'}`}>
                       <span className="animate-pulse">✨</span> {showAI ? 'Ocultar IA' : 'Analisar com IA'}
@@ -1295,6 +1605,7 @@
                 </div>
               )}
               
+              {/* TRANSACTIONS */}
               {activeTab === 'transactions' && (
                 <div className="space-y-6 animate-slide-up">
                   <form onSubmit={handleSaveTx} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
@@ -1340,7 +1651,7 @@
                   
                   <BentoCard title={`Transações de ${monthFilter}`}>
                     <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400">Nenhuma transação.</p> : filteredTransactions.map((t, index) => (
+                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400">Nenhuma transação.</p> : filteredTransactions.map((t) => (
                         <div key={t.id} className="flex justify-between items-center p-5 rounded-2xl bg-slate-100/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 transition-all group">
                           <div>
                             <p className="font-bold flex items-center gap-2 text-base">
@@ -1364,11 +1675,12 @@
                 </div>
               )}
               
+              {/* SUBSCRIPTIONS - CORRIGIDO com categoria e scope */}
               {activeTab === 'subscriptions' && (
                 <div className="space-y-6 animate-slide-up">
                   <form onSubmit={handleSaveSub} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
                     <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
-                      <h3 className="font-extrabold text-xl">Nova Assinatura</h3>
+                      <h3 className="font-extrabold text-xl">{subForm.id ? 'Editar Assinatura' : 'Nova Assinatura'}</h3>
                       <div className="mt-4 md:mt-0 px-5 py-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 dark:border-rose-800/50">
                         <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mb-1">Custo Fixo Mensal</p>
                         <p className="font-black text-rose-600 dark:text-rose-400 text-xl">{formatMoney(totalSubscriptions)}</p>
@@ -1389,19 +1701,41 @@
                         <label className={labelClass}>Dia Venc.</label>
                         <input type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className={`${inputClass} text-center`} />
                       </div>
+                      <div>
+                        <label className={labelClass}>Categoria</label>
+                        <select value={subForm.category} onChange={e=>setSubForm({...subForm, category: e.target.value})} className={inputClass}>
+                          {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      {isCouple && (
+                        <div>
+                          <label className={labelClass}>Visibilidade</label>
+                          <select value={subForm.scope} onChange={e=>setSubForm({...subForm, scope: e.target.value})} className={inputClass}>
+                            <option value="private">🔒 Pessoal</option>
+                            <option value="shared">👥 Compartilhada</option>
+                          </select>
+                        </div>
+                      )}
                       <div className="col-span-full flex justify-end gap-3 mt-4">
+                        {subForm.id && <button type="button" onClick={()=>{setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, scope: 'private' }); setFormErrors(prev => ({...prev, sub: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
                         <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">Salvar</button>
                       </div>
                     </div>
                   </form>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhuma assinatura.</div> : subscriptions.map((s, idx) => (
+                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhuma assinatura.</div> : subscriptions.map((s) => (
                       <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-50 grayscale'}`}>
                         <div className="flex justify-between items-start mb-6">
-                          <div><h4 className="font-extrabold text-lg">{s.desc}</h4><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p></div>
+                          <div>
+                            <h4 className="font-extrabold text-lg flex items-center gap-2">
+                              {s.desc}
+                              {isCouple && <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>{s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}</span>}
+                            </h4>
+                            <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p>
+                          </div>
                           <div className="flex gap-2">
-                            <button onClick={()=>setSubForm(s)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl">✏️</button>
+                            <button onClick={()=>handleEditSub(s)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl">✏️</button>
                             <button onClick={()=>handleDeleteSub(s.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl">🗑️</button>
                           </div>
                         </div>
@@ -1416,51 +1750,78 @@
                 </div>
               )}
               
+              {/* INSTALLMENTS - CORRIGIDO com paidInstallments */}
               {activeTab === 'installments' && (
                 <div className="space-y-6 animate-slide-up">
                   <form onSubmit={handleSaveInst} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
-                    <h3 className="font-extrabold text-xl mb-6">Novo Parcelamento</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 items-end">
+                    <h3 className="font-extrabold text-xl mb-6">{instForm.id ? 'Editar Parcelamento' : 'Novo Parcelamento'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-5 items-end">
                       <div className="lg:col-span-2">
                         <label className={labelClass}>Compra</label>
-                        <input type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} />
+                        <input type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} placeholder="Ex: iPhone" />
                         {formErrors.inst.desc && <div className="error-message">⚠️ {formErrors.inst.desc}</div>}
                       </div>
                       <div>
                         <label className={labelClass}>Parcela (R$)</label>
-                        <input type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} />
+                        <input type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} placeholder="0,00" />
+                        {formErrors.inst.installmentValue && <div className="error-message">⚠️ {formErrors.inst.installmentValue}</div>}
                       </div>
                       <div>
                         <label className={labelClass}>Total Parcelas</label>
                         <input type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className={`${inputClass} ${formErrors.inst.totalInstallments ? 'field-error' : ''} text-center`} />
+                        {formErrors.inst.totalInstallments && <div className="error-message">⚠️ {formErrors.inst.totalInstallments}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Já Pagas</label>
+                        <input type="number" min="0" max={instForm.totalInstallments || 99} value={instForm.paidInstallments} onChange={e=>setInstForm({...instForm, paidInstallments: e.target.value})} className={`${inputClass} text-center`} />
                       </div>
                       <div>
                         <label className={labelClass}>Dia Venc.</label>
                         <input type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className={`${inputClass} text-center`} />
                       </div>
+                      <div>
+                        <label className={labelClass}>Categoria</label>
+                        <select value={instForm.category} onChange={e=>setInstForm({...instForm, category: e.target.value})} className={inputClass}>
+                          {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
+                      </div>
+                      {isCouple && (
+                        <div>
+                          <label className={labelClass}>Visibilidade</label>
+                          <select value={instForm.scope} onChange={e=>setInstForm({...instForm, scope: e.target.value})} className={inputClass}>
+                            <option value="private">🔒 Pessoal</option>
+                            <option value="shared">👥 Compartilhada</option>
+                          </select>
+                        </div>
+                      )}
                       <div className="col-span-full flex justify-end gap-3 mt-4">
+                        {instForm.id && <button type="button" onClick={()=>{setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas', scope: 'private' }); setFormErrors(prev => ({...prev, inst: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
                         <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">Salvar</button>
                       </div>
                     </div>
                   </form>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {installments.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhum parcelamento.</div> : installments.map((i, idx) => {
+                    {installments.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhum parcelamento.</div> : installments.map((i) => {
                       const cur = Math.min(parseInt(i.paidInstallments) || 0, parseInt(i.totalInstallments));
                       const pct = i.totalInstallments > 0 ? (cur / parseInt(i.totalInstallments)) * 100 : 0;
+                      const isComplete = cur >= parseInt(i.totalInstallments);
                       return (
-                        <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all ${i.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70'}`}>
+                        <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all ${isComplete ? 'opacity-75 border-emerald-300 dark:border-emerald-700' : i.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70'}`}>
                           <div className="flex justify-between items-start mb-6">
-                            <h4 className="font-extrabold text-lg">{i.desc}</h4>
+                            <h4 className="font-extrabold text-lg flex items-center gap-2">
+                              {i.desc}
+                              {isComplete && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full uppercase font-black">✓ Pago</span>}
+                            </h4>
                             <div className="flex gap-2">
-                              <button onClick={()=>setInstForm(i)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl">✏️</button>
+                              <button onClick={()=>handleEditInst(i)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl">✏️</button>
                               <button onClick={()=>handleDeleteInst(i.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl">🗑️</button>
                             </div>
                           </div>
                           <div className="mb-6">
                             <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2"><span>{cur}/{i.totalInstallments}</span><span>{pct.toFixed(0)}%</span></div>
                             <div className="w-full h-2.5 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
-                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${i.active ? 'bg-gradient-to-r from-brand-400 to-brand-600' : 'bg-emerald-500'}`} style={{width: `${pct}%`}}></div>
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isComplete ? 'bg-emerald-500' : i.active ? 'bg-gradient-to-r from-brand-400 to-brand-600' : 'bg-slate-400'}`} style={{width: `${pct}%`}}></div>
                             </div>
                           </div>
                           <div className="flex justify-between items-end">
@@ -1474,50 +1835,83 @@
                 </div>
               )}
               
+              {/* GOALS - CORRIGIDO com edição funcional + cálculo de sobra */}
               {activeTab === 'goals' && (
                 <div className="space-y-6 animate-slide-up">
                   <form onSubmit={handleSaveGoal} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
-                    <h3 className="font-extrabold text-xl mb-6">Nova Meta</h3>
+                    <h3 className="font-extrabold text-xl mb-6">{goalForm.id ? 'Editar Meta' : 'Nova Meta'}</h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
                       <div>
                         <label className={labelClass}>Objetivo</label>
-                        <input type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className={`${inputClass} ${formErrors.goal.name ? 'field-error' : ''}`} />
+                        <input type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className={`${inputClass} ${formErrors.goal.name ? 'field-error' : ''}`} placeholder="Ex: Viagem" />
                         {formErrors.goal.name && <div className="error-message">⚠️ {formErrors.goal.name}</div>}
                       </div>
                       <div>
                         <label className={labelClass}>Alvo (R$)</label>
-                        <input type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className={`${inputClass} ${formErrors.goal.target ? 'field-error' : ''}`} />
+                        <input type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className={`${inputClass} ${formErrors.goal.target ? 'field-error' : ''}`} placeholder="0,00" />
+                        {formErrors.goal.target && <div className="error-message">⚠️ {formErrors.goal.target}</div>}
                       </div>
                       <div>
                         <label className={labelClass}>Já Guardado</label>
-                        <input type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className={inputClass} />
+                        <input type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className={inputClass} placeholder="0,00" />
                       </div>
                       <div className="col-span-full flex justify-end gap-3 mt-4">
-                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">Salvar</button>
+                        {goalForm.id && <button type="button" onClick={()=>{setGoalForm({ id: null, name: '', target: '', current: '0' }); setFormErrors(prev => ({...prev, goal: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar Edição</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">{goalForm.id ? 'Atualizar Meta' : 'Salvar Meta'}</button>
                       </div>
                     </div>
                   </form>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {goals.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhuma meta.</div> : goals.map((g, idx) => {
-                      const pct = Math.min(100, (g.current / g.target) * 100);
+                    {goals.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhuma meta.</div> : goals.map((g) => {
+                      const current = parseFloat(g.current) || 0;
+                      const target = parseFloat(g.target) || 0;
+                      const pct = target > 0 ? Math.min(100, (current / target) * 100) : 0;
+                      const diff = current - target;
+                      const isComplete = current >= target;
+                      const isOver = current > target;
+                      
                       return (
-                        <div key={g.id} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all">
+                        <div key={g.id} className={`glass-card p-6 rounded-3xl flex flex-col justify-between transition-all ${isComplete ? 'border-2 border-emerald-300 dark:border-emerald-700' : 'hover:-translate-y-1 hover:shadow-2xl'}`}>
                           <div>
                             <div className="flex justify-between items-start mb-4">
-                              <h3 className="font-extrabold text-lg">{g.name}</h3>
+                              <h3 className="font-extrabold text-lg flex items-center gap-2">
+                                {g.name}
+                                {isComplete && <span className="text-[9px] bg-emerald-100 dark:bg-emerald-900/50 text-emerald-600 dark:text-emerald-400 px-2 py-0.5 rounded-full uppercase font-black">✓ Atingida</span>}
+                              </h3>
                               <div className="flex gap-2">
-                                <button onClick={()=>setGoalForm(g)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl">✏️</button>
+                                <button onClick={()=>handleEditGoal(g)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl">✏️</button>
                                 <button onClick={()=>handleDeleteGoal(g.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl">🗑️</button>
                               </div>
                             </div>
-                            <p className="text-xs text-slate-500 mb-6"><span className="font-black text-2xl mr-1">{formatMoney(g.current)}</span> de {formatMoney(g.target)}</p>
+                            <p className="text-xs text-slate-500 mb-4">
+                              <span className="font-black text-2xl mr-1 text-slate-800 dark:text-white">{formatMoney(current)}</span> 
+                              de {formatMoney(target)}
+                            </p>
+                            
+                            {/* NOVO: Cálculo inteligente de sobra/falta */}
+                            {!isComplete && target > 0 && (
+                              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800/50 mb-4">
+                                <p className="text-[10px] text-amber-700 dark:text-amber-300 uppercase font-bold tracking-wider mb-1">Falta para a meta</p>
+                                <p className="font-black text-xl text-amber-700 dark:text-amber-300">{formatMoney(Math.abs(diff))}</p>
+                              </div>
+                            )}
+                            
+                            {isOver && (
+                              <div className="p-3 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800/50 mb-4">
+                                <p className="text-[10px] text-emerald-700 dark:text-emerald-300 uppercase font-bold tracking-wider mb-1">🎉 Você ultrapassou a meta!</p>
+                                <p className="font-black text-xl text-emerald-700 dark:text-emerald-300">+{formatMoney(diff)}</p>
+                                <p className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1">Sobrando para gastar ou investir</p>
+                              </div>
+                            )}
                           </div>
                           <div>
                             <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
-                              <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000 ease-out rounded-full" style={{ width: `${pct}%` }}></div>
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isComplete ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 'bg-gradient-to-r from-brand-400 to-brand-600'}`} style={{ width: `${pct}%` }}></div>
                             </div>
-                            <div className="text-right text-[10px] font-black tracking-widest text-brand-500">{pct.toFixed(1)}%</div>
+                            <div className={`text-right text-[10px] font-black tracking-widest ${isComplete ? 'text-emerald-500' : 'text-brand-500'}`}>
+                              {pct > 100 ? `${pct.toFixed(1)}% (EXCEDIDO)` : `${pct.toFixed(1)}%`}
+                            </div>
                           </div>
                         </div>
                       );
@@ -1526,6 +1920,7 @@
                 </div>
               )}
               
+              {/* BUDGETS */}
               {activeTab === 'budgets' && (
                 <div className="space-y-6 animate-slide-up">
                   <form onSubmit={handleSetBudget} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
@@ -1537,7 +1932,7 @@
                       </div>
                       <div>
                         <label className={labelClass}>Limite (R$)</label>
-                        <input type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`${inputClass} ${formErrors.budget.limit ? 'field-error' : ''}`} />
+                        <input type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`${inputClass} ${formErrors.budget.limit ? 'field-error' : ''}`} placeholder="0,00" />
                         {formErrors.budget.limit && <div className="error-message">⚠️ {formErrors.budget.limit}</div>}
                       </div>
                       <button type="submit" className="bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">Definir</button>
@@ -1545,8 +1940,9 @@
                   </form>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Object.keys(budgets).length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhum orçamento.</div> : Object.entries(budgets).map(([cat, limit], idx) => {
+                    {Object.keys(budgets).length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400">Nenhum orçamento.</div> : Object.entries(budgets).map(([cat, limit]) => {
                       const spent = categoriesTotal[cat]?.val || 0; const pct = Math.min(100, (spent / limit) * 100); const isOver = spent > limit;
+                      const remaining = limit - spent;
                       return (
                         <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all">
                           <div>
@@ -1554,7 +1950,13 @@
                               <h3 className="font-extrabold text-lg">{cat}</h3>
                               <button type="button" onClick={()=>handleDeleteBudget(cat)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl">🗑️</button>
                             </div>
-                            <p className="text-sm mb-6">Gasto: <span className={`font-black text-xl ${isOver?'text-rose-500':''}`}>{formatMoney(spent)}</span> de {formatMoney(limit)}</p>
+                            <p className="text-sm mb-4">Gasto: <span className={`font-black text-xl ${isOver?'text-rose-500':''}`}>{formatMoney(spent)}</span> de {formatMoney(limit)}</p>
+                            {!isOver && (
+                              <div className="p-2 rounded-lg bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50">
+                                <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider">Disponível</p>
+                                <p className="font-black text-lg text-brand-700 dark:text-brand-300">{formatMoney(remaining)}</p>
+                              </div>
+                            )}
                           </div>
                           <div>
                             <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
@@ -1569,7 +1971,7 @@
                 </div>
               )}
               
-              {/* ABA CONFIGURAÇÕES - COM OPÇÃO DE MIGRAÇÃO DE MODO */}
+              {/* SETTINGS - CORRIGIDO com seção "Meu Casal" e opção de gerar novo código */}
               {activeTab === 'sync' && (
                 <div className="space-y-6 animate-slide-up max-w-4xl mx-auto">
                   <BentoCard title="Seu Perfil" icon="👤">
@@ -1585,14 +1987,50 @@
                       <div className="p-6 bg-gradient-to-br from-brand-50 to-partner-50 dark:from-brand-900/20 dark:to-partner-900/20 rounded-3xl border border-brand-200 dark:border-brand-800/50">
                         <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-2">Status da Nuvem</p>
                         <p className="font-bold text-lg text-brand-700 dark:text-brand-300 mb-2">✅ Sincronizado</p>
-                        <p className="text-sm text-slate-600 dark:text-slate-400">Dados salvos com segurança no Firebase. Acesse de qualquer dispositivo.</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Dados salvos com segurança no Firebase.</p>
                       </div>
                     </div>
                   </BentoCard>
                   
-                  {/* NOVO: Seção de Migração de Modo */}
+                  {/* NOVO: Seção "Meu Casal" com opção de gerar novo código */}
+                  {isCouple && (
+                    <BentoCard title="Meu Casal" icon="💑" action={
+                      <button onClick={handleRegenerateCode} className="text-xs bg-partner-500 hover:bg-partner-600 text-white font-bold uppercase tracking-wider px-4 py-2 rounded-xl shadow-lg transition-all">
+                        ✉️ Gerar Novo Código
+                      </button>
+                    }>
+                      <div className="p-5 rounded-2xl bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 border border-partner-200 dark:border-partner-800/50">
+                        <div className="flex items-center gap-4 mb-4">
+                          <div className="w-14 h-14 rounded-full bg-gradient-to-br from-partner-400 to-brand-400 flex items-center justify-center text-white font-black text-xl shadow-lg">
+                            {(partnerData?.name || 'P').charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Seu(ua) parceiro(a)</p>
+                            <p className="font-extrabold text-xl text-slate-800 dark:text-white">{partnerData?.name || 'Parceiro(a)'}</p>
+                            <p className="text-xs text-slate-500">{partnerData?.email || ''}</p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 gap-3 mt-4">
+                          <div className="p-3 rounded-xl bg-white/50 dark:bg-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Status</p>
+                            <p className="font-bold text-emerald-600 dark:text-emerald-400">✓ Conectado</p>
+                          </div>
+                          <div className="p-3 rounded-xl bg-white/50 dark:bg-slate-800/50">
+                            <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-1">Seu nome no casal</p>
+                            <p className="font-bold">{userData?.settings?.nameInCouple || 'Pessoa A'}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50">
+                          <p className="text-xs text-blue-800 dark:text-blue-300">
+                            💡 <strong>Dica:</strong> Use "Gerar Novo Código" para convidar seu parceiro novamente ou compartilhar com um novo dispositivo.
+                          </p>
+                        </div>
+                      </div>
+                    </BentoCard>
+                  )}
+                  
                   <BentoCard title="Modo de Uso" icon="🔄">
-                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Você pode mudar de modo a qualquer momento. Seus dados pessoais são preservados.</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mb-6">Você pode mudar de modo a qualquer momento.</p>
                     
                     {!isCouple ? (
                       <div className="p-6 bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 rounded-2xl border border-partner-200 dark:border-partner-800/50">
@@ -1603,7 +2041,7 @@
                             <p className="text-sm text-slate-600 dark:text-slate-400">Convide seu parceiro(a) e gerenciem juntos.</p>
                           </div>
                         </div>
-                        <button onClick={handleMigrateToCouple} className="w-full bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">
+                        <button onClick={() => setShowMigrateModal(true)} className="w-full bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg hover:-translate-y-0.5 transition-all">
                           Ativar Modo Casal
                         </button>
                       </div>
@@ -1624,7 +2062,7 @@
                   </BentoCard>
                   
                   {isCouple && (
-                    <BentoCard title="Configurações do Casal" icon="💑">
+                    <BentoCard title="Configurações do Casal" icon="⚙️">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                         <div className="p-6 bg-brand-50 dark:bg-brand-900/20 rounded-3xl border border-brand-200 dark:border-brand-800/50">
                           <h3 className="font-bold mb-5 text-brand-600 flex items-center gap-2 text-sm uppercase tracking-wider">👤 {settings.nameA}</h3>
@@ -1672,150 +2110,32 @@
             ))}
           </div>
           
-          {/* Modal de Migração Solo → Casal */}
           {showMigrateModal && (
             <MigrateToCoupleModal onClose={() => setShowMigrateModal(false)} onSuccess={refreshUserData} />
           )}
-        </div>
-      );
-    }
-    
-    // Modal para migração Solo → Casal
-    function MigrateToCoupleModal({ onClose, onSuccess }) {
-      const { user, userData } = useAuth();
-      const [step, setStep] = useState(1);
-      const [action, setAction] = useState(null);
-      const [partnerEmail, setPartnerEmail] = useState('');
-      const [inviteCode, setInviteCode] = useState('');
-      const [generatedCode, setGeneratedCode] = useState('');
-      const [nameInCouple, setNameInCouple] = useState('Pessoa A');
-      const [error, setError] = useState('');
-      const [loading, setLoading] = useState(false);
-      
-      const handleCreate = async () => {
-        if (!partnerEmail) { setError('Digite o email'); return; }
-        setError(''); setLoading(true);
-        try {
-          const result = await DataService.createCouple({ uid: user.uid, name: userData.name }, partnerEmail, nameInCouple);
-          setGeneratedCode(result.inviteCode);
-          setStep(3);
-        } catch (err) { setError(err.message); }
-        finally { setLoading(false); }
-      };
-      
-      const handleJoin = async () => {
-        if (inviteCode.length !== 6) { setError('Código deve ter 6 caracteres'); return; }
-        setError(''); setLoading(true);
-        try {
-          await DataService.acceptInviteByCode({ uid: user.uid }, inviteCode);
-          await onSuccess();
-          onClose();
-        } catch (err) { setError(err.message); }
-        finally { setLoading(false); }
-      };
-      
-      return (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-          <div className="glass-card p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-slide-up">
-            {step === 1 && (
-              <>
-                <h2 className="font-extrabold text-2xl mb-6">Migrar para Modo Casal 👫</h2>
-                <p className="text-slate-500 mb-6">Você vai convidar alguém ou aceitar um convite?</p>
-                
-                <div className="space-y-3 mb-6">
-                  <button onClick={() => { setAction('create'); setStep(2); }} className="w-full p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left">
-                    <div className="font-bold">✉️ Convidar parceiro(a)</div>
-                    <div className="text-sm text-slate-500">Gero um código para enviar</div>
-                  </button>
-                  <button onClick={() => { setAction('join'); setStep(2); }} className="w-full p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left">
-                    <div className="font-bold">🔑 Recebi um código</div>
-                    <div className="text-sm text-slate-500">Vou digitar o código</div>
-                  </button>
-                </div>
-                
-                <button onClick={onClose} className="w-full text-slate-500 hover:text-brand-500 font-medium py-2">Cancelar</button>
-              </>
-            )}
-            
-            {step === 2 && action === 'create' && (
-              <>
-                <h2 className="font-extrabold text-2xl mb-6">Convidar Parceiro(a)</h2>
-                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm">⚠️ {error}</div>}
-                
-                <div className="space-y-4 mb-6">
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email do parceiro(a)</label>
-                    <input type="email" value={partnerEmail} onChange={e => setPartnerEmail(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none" placeholder="parceiro@email.com" />
-                    <p className="text-xs text-slate-500 mt-1.5">⚠️ Seu parceiro deve ter conta criada.</p>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seu nome no casal</label>
-                    <select value={nameInCouple} onChange={e => setNameInCouple(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none">
-                      <option value="Pessoa A">Pessoa A</option>
-                      <option value="Pessoa B">Pessoa B</option>
-                    </select>
-                  </div>
-                </div>
-                
-                <div className="flex gap-3">
-                  <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-3 rounded-xl">Voltar</button>
-                  <button onClick={handleCreate} disabled={loading} className="flex-1 bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg">
-                    {loading ? 'Gerando...' : 'Gerar Código'}
-                  </button>
-                </div>
-              </>
-            )}
-            
-            {step === 2 && action === 'join' && (
-              <>
-                <h2 className="font-extrabold text-2xl mb-6">Aceitar Convite</h2>
-                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm">⚠️ {error}</div>}
-                
-                <div className="mb-6">
-                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Código de 6 caracteres</label>
-                  <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} maxLength="6" className="w-full px-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none text-center font-mono font-black text-2xl tracking-[0.5em]" placeholder="XXXXXX" />
-                </div>
-                
-                <div className="flex gap-3">
-                  <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-3 rounded-xl">Voltar</button>
-                  <button onClick={handleJoin} disabled={loading} className="flex-1 bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg">
-                    {loading ? 'Entrando...' : 'Entrar'}
-                  </button>
-                </div>
-              </>
-            )}
-            
-            {step === 3 && (
-              <>
-                <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-5xl">🎉</div>
-                  <h2 className="font-extrabold text-2xl mb-2">Casal criado!</h2>
-                  <p className="text-slate-500">Envie este código ao seu parceiro(a):</p>
+          
+          {/* NOVO: Modal para mostrar código de convite regenerado */}
+          {showInviteCodeModal && (
+            <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
+              <div className="glass-card p-8 rounded-3xl w-full max-w-md shadow-2xl animate-slide-up">
+                <div className="text-center mb-6">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-partner-100 dark:bg-partner-900/30 flex items-center justify-center text-4xl">✉️</div>
+                  <h2 className="font-extrabold text-2xl mb-2">Novo Código Gerado!</h2>
+                  <p className="text-slate-500 text-sm">Compartilhe este código com quem você quer convidar:</p>
                 </div>
                 
                 <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 p-6 rounded-2xl border border-partner-200 dark:border-partner-800/50 mb-6 text-center">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Código de Convite</p>
-                  <div className="font-mono font-black text-4xl tracking-[0.3em] text-partner-600 dark:text-partner-400 mb-4">{generatedCode}</div>
-                  <button onClick={() => navigator.clipboard?.writeText(generatedCode)} className="text-sm bg-white dark:bg-slate-800 font-bold py-2 px-6 rounded-xl shadow-md">📋 Copiar</button>
+                  <div className="font-mono font-black text-4xl tracking-[0.3em] text-partner-600 dark:text-partner-400 mb-4">{regeneratedCode}</div>
+                  <button onClick={() => { navigator.clipboard?.writeText(regeneratedCode); showToast('Código copiado!'); }} className="text-sm bg-white dark:bg-slate-800 font-bold py-2 px-6 rounded-xl shadow-md">📋 Copiar</button>
                 </div>
                 
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-4 rounded-xl mb-6">
-                  <p className="text-sm">
-                    <strong>Próximos passos:</strong><br/>
-                    1. Parceiro cria conta<br/>
-                    2. Vai em Configurações<br/>
-                    3. Clica em "Ativar Modo Casal"<br/>
-                    4. Clica em "Recebi um código"<br/>
-                    5. Digita este código
-                  </p>
-                </div>
-                
-                <button onClick={() => { onClose(); onSuccess(); }} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl shadow-lg">
-                  Concluir
+                <button onClick={() => setShowInviteCodeModal(false)} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl shadow-lg">
+                  Fechar
                 </button>
-              </>
-            )}
-          </div>
+              </div>
+            </div>
+          )}
         </div>
       );
     }
