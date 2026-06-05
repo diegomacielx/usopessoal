@@ -2063,58 +2063,85 @@
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {subscriptions.length === 0 ? (
-  <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma assinatura cadastrada.</div>
-) : (
-  subscriptions
-                      .sort((a, b) => {
-                        const today = new Date();
-                        const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-                        const aPaid = a.lastPaidMonth === currentMonth;
-                        const bPaid = b.lastPaidMonth === currentMonth;
-                        
-                        // Conversão explícita para Number previne falhas de coerção de String na verificação do dia
-                        const aDue = calcNextDue(Number(a.dayOfMonth));
-                        const bDue = calcNextDue(Number(b.dayOfMonth));
-                        
-                        // 1º Nível: Inativas vão para o final absoluto da lista
-                        if (a.active !== b.active) return a.active ? -1 : 1;
-                        
-                        // 2º Nível: Pagas este mês vão para o final (ficando logo acima das inativas)
-                        if (aPaid !== bPaid) return aPaid ? 1 : -1;
-                        
-                        // 3º Nível: Atrasadas possuem prioridade máxima de exibição no topo
-                        if (aDue.isLate !== bDue.isLate) return aDue.isLate ? -1 : 1;
-                        
-                        // 4º Nível: Desempate lógico dependendo do status do grupo
-                        if (aDue.isLate) {
-                          // Se ambas estão atrasadas: Ordena por MAIOR tempo de atraso primeiro (ordem decrescente)
-                          return bDue.daysLate - aDue.daysLate;
-                        } else {
-                          // Se ambas estão a vencer: Ordena pelo MENOR tempo até a data de corte (ordem crescente)
-                          return aDue.diffDays - bDue.diffDays;
-                        }
-                      })
-                      .map((s, idx) => {
-      const due = calcNextDue(s.dayOfMonth);
-      const today = new Date();
-      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-      const isPaidThisMonth = s.lastPaidMonth === currentMonth;
-      
-      return (
-        <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl border-white/60 dark:border-white/10' : 'opacity-50 grayscale border-slate-300 dark:border-slate-700'}`} style={{ animationDelay: `${idx * 100}ms` }}>
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <h4 className="font-extrabold text-lg flex items-center gap-2 flex-wrap">
-                {s.desc}
-                {isCouple && <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>{s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}</span>}
-              </h4>
-              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p>
-            </div>
-            <div className="flex gap-1">
-              <button onClick={()=>handleEditSub(s)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl" aria-label="Editar">✏️</button>
-              <button onClick={()=>handleDeleteSub(s.id)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl" aria-label="Excluir">🗑️</button>
-            </div>
-          </div>
+                      <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma assinatura cadastrada.</div>
+                    ) : (
+                      subscriptions
+                        .sort((a, b) => {
+                          const today = new Date();
+                          const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                          const aPaid = a.lastPaidMonth === currentMonth;
+                          const bPaid = b.lastPaidMonth === currentMonth;
+                          
+                          const aDue = calcNextDue(Number(a.dayOfMonth));
+                          const bDue = calcNextDue(Number(b.dayOfMonth));
+                          
+                          if (a.active !== b.active) return a.active ? -1 : 1;
+                          if (aPaid !== bPaid) return aPaid ? 1 : -1;
+                          if (aDue.isLate !== bDue.isLate) return aDue.isLate ? -1 : 1;
+                          
+                          if (aDue.isLate) {
+                            return bDue.daysLate - aDue.daysLate;
+                          } else {
+                            return aDue.diffDays - bDue.diffDays;
+                          }
+                        })
+                        .map((s, idx) => {
+                          const due = calcNextDue(Number(s.dayOfMonth));
+                          const today = new Date();
+                          const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+                          const isPaidThisMonth = s.lastPaidMonth === currentMonth;
+                          
+                          return (
+                            <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl border-white/60 dark:border-white/10' : 'opacity-50 grayscale border-slate-300 dark:border-slate-700'}`} style={{ animationDelay: `${idx * 100}ms` }}>
+                              <div className="flex justify-between items-start mb-4">
+                                <div>
+                                  <h4 className="font-extrabold text-lg flex items-center gap-2 flex-wrap">
+                                    {s.desc}
+                                    {isCouple && <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>{s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}</span>}
+                                  </h4>
+                                  <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p>
+                                </div>
+                                <div className="flex gap-1">
+                                  <button onClick={()=>handleEditSub(s)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl" aria-label="Editar">✏️</button>
+                                  <button onClick={()=>handleDeleteSub(s.id)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl" aria-label="Excluir">🗑️</button>
+                                </div>
+                              </div>
+                              
+                              {s.active && isPaidThisMonth && (
+                                <div className="mb-4 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                  ✓ Paga este mês
+                                </div>
+                              )}
+                              {s.active && !isPaidThisMonth && (
+                                <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold ${due.isLate ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'}`}>
+                                  {due.isLate ? `⚠️ Atrasado há ${due.daysLate} dia${due.daysLate !== 1 ? 's' : ''}` : `📅 Vence em ${due.diffDays} dia${due.diffDays !== 1 ? 's' : ''} (dia ${s.dayOfMonth})`}
+                                </div>
+                              )}
+                              
+                              <div className="flex justify-between items-end mb-4">
+                                <div>
+                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Valor</p>
+                                  <p className="font-black text-3xl tracking-tight text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(s.value)}</p>
+                                </div>
+                                <div className="text-right">
+                                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Dia</p>
+                                  <p className="font-black text-xl text-brand-500 drop-shadow-sm">{s.dayOfMonth}</p>
+                                </div>
+                              </div>
+                              
+                              <div className="space-y-2">
+                                {s.active && !isPaidThisMonth && (
+                                  <button onClick={()=>handleMarkSubAsPaid(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm shadow-lg transition-all ${due.isLate ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>
+                                    {due.isLate ? '⚠️ Marcar como Paga (Atrasada)' : '✓ Marcar como Paga'}
+                                  </button>
+                                )}
+                                <button onClick={()=>handleToggleSub(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-lg shadow-brand-500/30'}`}>{s.active ? 'Pausar' : 'Reativar'}</button>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
+                  </div>
                           
                           {/* Status de pagamento considerando lastPaidMonth */}
 {s.active && isPaidThisMonth && (
