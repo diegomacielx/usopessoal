@@ -1515,7 +1515,7 @@
       subscriptionId: sub.id,
     });
     
-    // NOVO: Marca o mês como pago
+    // Marca o mês como pago
     await DataService.updateSubscription(sub.id, { lastPaidMonth: currentMonth });
     
     // Recarrega transações E assinaturas
@@ -1523,7 +1523,9 @@
     setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId));
     
     showToast("Marcada como paga!");
-  } catch (err) { showToast('Erro', true, err.message); }
+  } catch (err) { 
+    showToast('Erro', true, err.message); 
+  }
 };
       desc: sub.desc,
       value: parseFloat(sub.value),
