@@ -1217,23 +1217,38 @@
         const startScanner = async () => {
           try {
             await html5QrCode.start(
-              { facingMode: "environment" },
+              // 1. Tenta forçar o foco automático contínuo na câmera nativa
+              { facingMode: "environment", advanced: [{ focusMode: "continuous" }] },
               {
                 fps: 15,
-                // REMOVIDOS: qrbox e aspectRatio. 
-                // Assim a câmera usa a proporção nativa do celular e não distorce a imagem do QR Code.
+                // 2. O Segredo: Retornar o qrbox. Isso cria a "janela de foco".
+                // Sem ela, o algoritmo tenta ler a tela inteira e falha no PIX que é muito denso.
+                qrbox: { width: 280, height: 280 } 
               },
               (decodedText) => {
+                // Sucesso!
                 html5QrCode.stop().then(() => {
                   onScanSuccess(decodedText);
                 }).catch(console.error);
               },
               (errorMessage) => {
-                // Falhas silenciosas de frame (ignoramos)
+                // Erros contínuos de frame vazio (ignoramos silenciosamente)
               }
             );
+            
+            // 3. Truque cirúrgico de CSS para forçar a lente a não esticar,
+            // aplicando object-fit direto na tag de vídeo que a biblioteca cria.
+            setTimeout(() => {
+              const video = document.querySelector("#qr-reader video");
+              if (video) {
+                video.style.objectFit = "cover";
+                video.style.width = "100%";
+                video.style.height = "100%";
+              }
+            }, 500);
+
           } catch (err) {
-            setErrorMsg("Não foi possível iniciar a câmera. Verifique as permissões do seu navegador.");
+            setErrorMsg("Erro ao iniciar a câmera. Tente recarregar a página.");
             console.error(err);
           }
         };
@@ -1248,12 +1263,12 @@
       }, [onScanSuccess]);
 
       return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
-          <div className="bg-slate-900 p-4 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up border border-slate-700 flex flex-col h-[85vh] md:h-auto">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-slate-900 p-6 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up border border-slate-700 flex flex-col">
             
-            <div className="text-center mb-4 mt-2">
-              <h3 className="font-extrabold text-xl text-white mb-1">📸 Escanear Código</h3>
-              <p className="text-xs text-slate-400 font-medium">Aponte para o QR Code (PIX ou NFC-e)</p>
+            <div className="text-center mb-6">
+              <h3 className="font-extrabold text-xl text-white mb-2">📸 Escanear Código</h3>
+              <p className="text-xs text-slate-400 font-medium">Posicione o PIX ou NFC-e na área clara</p>
             </div>
             
             {errorMsg ? (
@@ -1261,19 +1276,13 @@
                 ⚠️ {errorMsg}
               </div>
             ) : (
-              <div className="relative w-full flex-1 md:h-72 rounded-2xl overflow-hidden mb-6 bg-black shadow-[0_0_30px_rgba(20,184,166,0.15)] border-2 border-brand-500/30">
-                {/* O contêiner de vídeo sem restrições de CSS para manter a proporção da câmera */}
-                <div id="qr-reader" className="w-full h-full flex items-center justify-center"></div>
-                
-                {/* Mira visual */}
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="w-2/3 aspect-square border-[3px] border-brand-500/80 rounded-3xl"></div>
-                  <div className="absolute w-full h-[2px] bg-brand-500/50 animate-pulse top-1/2 shadow-[0_0_10px_rgba(20,184,166,0.8)]"></div>
-                </div>
+              // A div do leitor
+              <div className="relative w-full aspect-square rounded-3xl overflow-hidden mb-8 bg-black shadow-[0_0_40px_rgba(20,184,166,0.15)] border-2 border-brand-500/50">
+                <div id="qr-reader" className="w-full h-full"></div>
               </div>
             )}
             
-            <button onClick={onCancel} className="w-full py-4 mt-auto mb-2 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs shrink-0">
+            <button onClick={onCancel} className="w-full py-4 mt-auto bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs">
               Cancelar e Voltar
             </button>
           </div>
