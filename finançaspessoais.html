@@ -328,6 +328,7 @@
     };
 
     // ==================== AUTH CONTEXT ====================
+    // ==================== AUTH CONTEXT ====================
     const AuthContext = createContext();
 
     function AuthProvider({ children }) {
@@ -337,22 +338,37 @@
       const [loading, setLoading] = useState(true);
       
       const loadUserData = async (firebaseUser) => {
-        const data = await DataService.getUserData(firebaseUser.uid);
-        setUserData(data);
-        if (data?.coupleId) setCoupleData(await DataService.getCoupleData(data.coupleId));
-        else setCoupleData(null);
+        try {
+          const data = await DataService.getUserData(firebaseUser.uid);
+          setUserData(data);
+          if (data?.coupleId) setCoupleData(await DataService.getCoupleData(data.coupleId));
+          else setCoupleData(null);
+        } catch (error) {
+          console.error("Erro ao carregar dados do usuário (possível bloqueio de navegador):", error);
+        }
       };
       
       useEffect(() => {
-        return auth.onAuthStateChanged(async (firebaseUser) => {
-          if (firebaseUser) {
-            setUser(firebaseUser);
-            await loadUserData(firebaseUser);
-          } else {
-            setUser(null); setUserData(null); setCoupleData(null);
+        // Tenta contornar bloqueios agressivos de cookies/storage no iOS
+        auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL)
+            .catch(() => auth.setPersistence(firebase.auth.Auth.Persistence.NONE));
+
+        const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+          try {
+            if (firebaseUser) {
+              setUser(firebaseUser);
+              await loadUserData(firebaseUser);
+            } else {
+              setUser(null); setUserData(null); setCoupleData(null);
+            }
+          } catch (error) {
+            console.error("Erro no Auth State:", error);
+          } finally {
+            // A MÁGICA AQUI: A tela de "Carregando" SEMPRE vai sumir, mesmo se o Brave bloquear o banco.
+            setLoading(false);
           }
-          setLoading(false);
         });
+        return unsubscribe;
       }, []);
       
       const refreshUserData = async () => { if (user) await loadUserData(user); };
