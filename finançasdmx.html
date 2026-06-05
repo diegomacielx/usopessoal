@@ -21,16 +21,15 @@
             partner: { 50: '#f5f3ff', 100: '#ede9fe', 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 900: '#4c1d95' }
           },
           animation: {
-            'blob': 'blob 7s infinite',
+            'blob': 'blob 20s infinite',
             'fade-in': 'fadeIn 0.5s ease-out forwards',
             'slide-up': 'slideUp 0.5s ease-out forwards',
           },
           keyframes: {
             blob: {
-              '0%': { transform: 'translate(0px, 0px) scale(1)' },
-              '33%': { transform: 'translate(30px, -50px) scale(1.1)' },
-              '66%': { transform: 'translate(-20px, 20px) scale(0.9)' },
-              '100%': { transform: 'translate(0px, 0px) scale(1)' },
+              '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
+              '33%': { transform: 'translate(40px, -60px) scale(1.15)' },
+              '66%': { transform: 'translate(-30px, 30px) scale(0.9)' },
             },
             fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
             slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
@@ -68,18 +67,30 @@
     .field-error { border-color: #f43f5e !important; background-color: rgba(244, 63, 94, 0.05) !important; }
     .error-message { color: #f43f5e; font-size: 0.75rem; margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
     
-    /* Gráfico Donut Suave */
     .donut-segment { transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s; }
-    .donut-segment:hover { stroke-width: 14; filter: drop-shadow(0 0 4px currentColor); }
+    .donut-segment:hover { stroke-width: 14; filter: drop-shadow(0 0 6px currentColor); }
+    
+    /* Acessibilidade: labels visualmente ocultos mas legíveis por leitores de tela */
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0, 0, 0, 0);
+      white-space: nowrap;
+      border-width: 0;
+    }
   </style>
 </head>
 <body class="bg-slate-50 text-slate-900 dark:bg-[#050914] dark:text-slate-100 min-h-screen transition-colors duration-500">
   
-  <!-- Ambient Background Glows -->
+  <!-- FUNDO AMBIENTAL COM BLOBS (Restaurado da minha versão) -->
   <div className="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
     <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-400/20 dark:bg-brand-500/10 rounded-full blur-[120px] animate-blob"></div>
-    <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-400/20 dark:bg-partner-500/10 rounded-full blur-[120px] animate-blob" style={{animationDelay: '2s'}}></div>
-    <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-blue-400/10 dark:bg-blue-500/5 rounded-full blur-[100px] animate-blob" style={{animationDelay: '4s'}}></div>
+    <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-400/20 dark:bg-partner-500/10 rounded-full blur-[120px] animate-blob" style={{animationDelay: '5s'}}></div>
+    <div className="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-blue-400/10 dark:bg-blue-500/5 rounded-full blur-[100px] animate-blob" style={{animationDelay: '10s'}}></div>
   </div>
 
   <div id="root"></div>
@@ -88,7 +99,6 @@
     const { useState, useEffect, useMemo, useCallback, memo } = React;
     const { get, set } = idbKeyval;
 
-    // --- Utils & Crypto ---
     const getLocalDateString = () => {
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
@@ -127,7 +137,6 @@
 
     const predefinedCategories = ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Habitação', 'Educação', 'Vestuário', 'Pets', 'Assinaturas', 'Dívidas', 'Investimentos', 'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'];
 
-    // --- Componentes Visuais Premium ---
     const BentoCard = ({ children, className = "", title, icon, action }) => (
       <div className={`glass-card p-6 rounded-3xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 ${className}`}>
         {(title || action) && (
@@ -213,7 +222,6 @@
       );
     });
 
-    // --- App Component ---
     function App() {
       const [isLoaded, setIsLoaded] = useState(false);
       const [transactions, setTransactions] = useState([]);
@@ -335,7 +343,6 @@
         if (instsUpdated) setInstallments(nextInsts);
       }, [subscriptions, installments, transactions, isLoaded]);
 
-      // Handlers
       const handleSaveTx = (e) => {
         e.preventDefault();
         const errors = {};
@@ -457,6 +464,26 @@
         link.download = "financas_dmx.csv"; link.click(); showToast("CSV exportado.");
       };
 
+      const handleImportCSV = (e) => {
+        const file = e.target.files[0]; if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          const lines = evt.target.result.split(/\r?\n/); let added = 0; const newTxs = [];
+          for (let i = 1; i < lines.length; i++) {
+            if (!lines[i].trim()) continue;
+            const columns = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
+            if (columns.length >= 5) {
+              const [date, type, category, desc, value] = columns.map(c => c.trim().replace(/^"|"$/g, ''));
+              if (date && value && !isNaN(parseFloat(value))) {
+                newTxs.push({ id: generateId(), date, type: type === 'income' ? 'income' : 'expense', category, desc, value: parseFloat(value), scope: 'joint', paidBy: 'A', updatedAt: Date.now() });
+                added++;
+              }
+            }
+          }
+          if (added > 0) { setTransactions(prev => [...newTxs, ...prev]); showToast(`${added} importados!`); }
+        }; reader.readAsText(file); e.target.value = '';
+      };
+
       const generateAIReport = () => {
         const r = []; const bal = totals.inc - totals.exp; const sr = totals.inc > 0 ? (bal / totals.inc) * 100 : 0;
         if (totals.inc === 0) r.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda', text: 'Cadastre salários na aba Sync.' });
@@ -475,76 +502,124 @@
 
       return (
         <div className="flex flex-col md:flex-row min-h-screen relative">
-          {/* Sidebar */}
+          
           <nav className="glass-card md:w-72 flex-shrink-0 md:h-screen md:sticky top-0 z-50 p-6 flex md:flex-col justify-between order-last md:order-first fixed bottom-0 left-0 right-0 border-t md:border-t-0 md:border-r border-white/40 dark:border-white/5">
             <div className="flex flex-col h-full w-full overflow-y-auto custom-scrollbar">
               <div className="hidden md:flex items-center gap-3 mb-10">
-                <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-lg shadow-lg shadow-brand-500/20">D</div>
-                <div><h1 className="font-extrabold text-lg tracking-tight text-slate-900 dark:text-white">Finanças DMX</h1><p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">Enterprise</p></div>
+                <div className="w-12 h-12 flex items-center justify-center bg-white/20 dark:bg-slate-800/50 rounded-xl p-1 shadow-inner border border-white/40 dark:border-white/10">
+                  <img src="https://i.imgur.com/rLLYQ3Z.png" alt="Finanças DMX Logo" className="w-full h-full object-contain drop-shadow-md" />
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-brand-400 dark:from-brand-400 dark:to-brand-200">Finanças DMX</h1>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">Enterprise</p>
+                </div>
               </div>
+
               <div className="flex md:flex-col justify-around md:justify-start gap-1 md:gap-2 flex-1">
-                {[{ id: 'dashboard', icon: '📊', label: 'Dashboard' }, { id: 'transactions', icon: '💸', label: 'Transações' }, { id: 'subscriptions', icon: '🔁', label: 'Assinaturas' }, { id: 'installments', icon: '💳', label: 'Parcelas' }, { id: 'goals', icon: '🎯', label: 'Metas' }, { id: 'budgets', icon: '💰', label: 'Orçamentos' }, { id: 'sync', icon: '☁️', label: 'Sync & Config' }].map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col md:flex-row items-center md:justify-start gap-3 px-4 py-3 rounded-2xl transition-all duration-300 font-semibold text-xs md:text-sm ${activeTab === tab.id ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-lg transform md:translate-x-1' : 'text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50'}`} aria-current={activeTab === tab.id ? 'page' : undefined}>
-                    <span className="text-lg md:text-xl" aria-hidden="true">{tab.icon}</span><span className="hidden md:inline">{tab.label}</span>
+                {[
+                  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+                  { id: 'transactions', icon: '💸', label: 'Transações' },
+                  { id: 'subscriptions', icon: '🔁', label: 'Assinaturas' },
+                  { id: 'installments', icon: '💳', label: 'Parcelas' },
+                  { id: 'goals', icon: '🎯', label: 'Metas' },
+                  { id: 'budgets', icon: '💰', label: 'Orçamentos' },
+                  { id: 'sync', icon: '☁️', label: 'Sync & Config' }
+                ].map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} 
+                    className={`flex flex-col md:flex-row items-center md:justify-start gap-3 px-4 py-3 rounded-2xl transition-all duration-300 font-semibold text-xs md:text-sm ${activeTab === tab.id ? 'bg-gradient-to-r from-slate-900 to-slate-800 text-white dark:from-white dark:to-slate-200 dark:text-slate-900 shadow-lg shadow-brand-500/20 transform md:translate-x-1 border border-white/10' : 'text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    aria-current={activeTab === tab.id ? 'page' : undefined}>
+                    <span className="text-lg md:text-xl drop-shadow-sm" aria-hidden="true">{tab.icon}</span>
+                    <span className="hidden md:inline tracking-wide">{tab.label}</span>
                   </button>
                 ))}
               </div>
             </div>
           </nav>
 
-          {/* Main Content */}
           <main className="flex-1 p-4 md:p-10 pb-28 md:pb-10 max-h-screen overflow-y-auto custom-scrollbar">
+            
             <header className="md:hidden flex items-center justify-between mb-8 px-2">
-              <div className="flex items-center gap-3"><div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-sm">D</div><h1 className="font-extrabold text-lg tracking-tight">Finanças DMX</h1></div>
-              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 bg-slate-200 dark:bg-slate-800 rounded-full" aria-label="Alternar tema">{theme === 'dark' ? '☀️' : '🌙'}</button>
+               <div className="flex items-center gap-3">
+                 <img src="https://i.imgur.com/rLLYQ3Z.png" alt="Logo" className="w-8 h-8 object-contain" />
+                 <h1 className="font-extrabold text-lg tracking-tight">Finanças DMX</h1>
+               </div>
+               <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 glass-card rounded-full shadow-sm" aria-label="Alternar tema claro/escuro">
+                  {theme === 'dark' ? '☀️' : '🌙'}
+               </button>
             </header>
 
             <div className="max-w-6xl mx-auto space-y-8 pb-10 animate-fade-in">
-              {/* Header Filter */}
+              
               <div className="flex flex-wrap items-center justify-between gap-4 glass-card p-5 rounded-3xl">
                 <div className="flex items-center gap-3">
                   <label htmlFor="monthFilter" className="sr-only">Filtrar por mês</label>
-                  <input id="monthFilter" type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-transparent font-bold text-lg outline-none cursor-pointer text-slate-700 dark:text-slate-200" />
+                  <div className="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold text-lg shadow-inner" aria-hidden="true">📅</div>
+                  <input id="monthFilter" type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-transparent font-bold text-lg md:text-xl outline-none cursor-pointer text-slate-700 dark:text-slate-200" />
                 </div>
                 <div className="text-right">
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em] mb-1">Saldo Mensal</p>
-                  <p className={`text-3xl font-black tracking-tight ${totals.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.balance)}</p>
+                  <p className={`text-3xl font-black tracking-tight drop-shadow-sm ${totals.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.balance)}</p>
                 </div>
               </div>
 
-              {/* === DASHBOARD === */}
               {activeTab === 'dashboard' && (
                 <div className="space-y-6 animate-slide-up">
+                  
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <BentoCard className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white border-none" title="Acerto de Contas" icon="🤝">
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                        <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-sm"><p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p><p className="text-xl font-black">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p></div>
-                        <div className="p-4 bg-brand-500/20 rounded-2xl backdrop-blur-sm"><p className="text-[10px] text-brand-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameA}</p><p className="text-xl font-black text-brand-300">{(splitLogic.ratioA * 100).toFixed(1)}%</p></div>
-                        <div className="p-4 bg-partner-500/20 rounded-2xl backdrop-blur-sm"><p className="text-[10px] text-partner-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameB}</p><p className="text-xl font-black text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p></div>
+                    <BentoCard className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white border-none overflow-hidden relative" title="Acerto de Contas do Casal" icon="🤝">
+                      <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 relative z-10">
+                        <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10 hover:bg-white/20 transition-colors"><p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p><p className="text-xl font-black">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p></div>
+                        <div className="p-4 bg-brand-500/20 rounded-2xl backdrop-blur-sm border border-brand-500/20"><p className="text-[10px] text-brand-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameA}</p><p className="text-xl font-black text-brand-300">{(splitLogic.ratioA * 100).toFixed(1)}%</p></div>
+                        <div className="p-4 bg-partner-500/20 rounded-2xl backdrop-blur-sm border border-partner-500/20"><p className="text-[10px] text-partner-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameB}</p><p className="text-xl font-black text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p></div>
                       </div>
-                      <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-black/20 rounded-2xl border border-white/5">
-                        <div><p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gastos Conjuntos</p><p className="text-3xl font-black mt-1">{formatMoney(splitLogic.totalJointExp)}</p></div>
+                      <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-black/30 rounded-2xl border border-white/5 relative z-10">
+                        <div><p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gastos Conjuntos</p><p className="text-3xl font-black mt-1 drop-shadow-md">{formatMoney(splitLogic.totalJointExp)}</p></div>
                         <div className="text-center md:text-right">
-                          {splitLogic.balanceA > 0 ? <div className="text-emerald-400"><span className="text-sm font-medium">A receber de {settings.nameB}</span><br/><span className="text-3xl font-black">{formatMoney(splitLogic.balanceA)}</span></div>
-                          : splitLogic.balanceB > 0 ? <div className="text-rose-400"><span className="text-sm font-medium">A pagar para {settings.nameB}</span><br/><span className="text-3xl font-black">{formatMoney(splitLogic.balanceB)}</span></div>
+                          {splitLogic.balanceA > 0 ? <div className="text-brand-400"><span className="text-sm font-medium">A receber de {settings.nameB}</span><br/><span className="text-3xl font-black drop-shadow-md">{formatMoney(splitLogic.balanceA)}</span></div>
+                          : splitLogic.balanceB > 0 ? <div className="text-rose-400"><span className="text-sm font-medium">A pagar para {settings.nameB}</span><br/><span className="text-3xl font-black drop-shadow-md">{formatMoney(splitLogic.balanceB)}</span></div>
                           : <div className="text-slate-300 text-lg font-bold">Contas saldadas! ✅</div>}
                         </div>
                       </div>
                     </BentoCard>
 
-                    <BentoCard title="Resumo" icon="📈">
+                    <BentoCard title="Resumo do Mês" icon="📈">
                       <div className="space-y-4">
-                        <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800">
+                        <div className="p-5 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50 hover:scale-[1.02] transition-transform">
                           <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Receitas Totais</p>
                           <p className="text-2xl font-black text-brand-700 dark:text-brand-300">{formatMoney(totals.inc)}</p>
                         </div>
-                        <div className="p-4 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800">
+                        <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 hover:scale-[1.02] transition-transform">
                           <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Despesas Totais</p>
                           <p className="text-2xl font-black text-rose-700 dark:text-rose-300">{formatMoney(totals.exp)}</p>
                         </div>
                       </div>
                     </BentoCard>
                   </div>
+
+                  <div className="flex justify-end">
+                    <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white shadow-[0_10px_30px_rgba(139,92,246,0.3)]'}`} aria-expanded={showAI}>
+                      <span className="animate-pulse">✨</span> {showAI ? 'Ocultar Inteligência' : 'Analisar Finanças com IA'}
+                    </button>
+                  </div>
+
+                  {showAI && (
+                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-2xl border border-blue-500/20 animate-slide-up relative overflow-hidden">
+                      <div className="absolute -left-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                      <h3 className="font-extrabold text-xl mb-6 flex items-center gap-2 relative z-10"><span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-partner-500">Relatório Heurístico</span></h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                        {generateAIReport().map((r, idx) => {
+                          const styles = { success: 'bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300', warning: 'bg-amber-50/80 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300', danger: 'bg-rose-50/80 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300', info: 'bg-blue-50/80 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300' };
+                          return (
+                            <div key={idx} className={`p-5 rounded-2xl border backdrop-blur-sm ${styles[r.type]}`}>
+                              <h4 className="font-bold mb-2 flex items-center gap-2 text-sm uppercase tracking-wide"><span aria-hidden="true">{r.icon}</span> {r.title}</h4>
+                              <p className="text-sm font-medium opacity-90 leading-relaxed">{r.text}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <BentoCard title="Onde gastou?" icon="🍩">
@@ -554,103 +629,69 @@
                       <EvolutionChart transactions={transactions} settings={settings} />
                     </BentoCard>
                   </div>
-
-                  <div className="flex justify-end">
-                    <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-lg ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white hover:scale-105 shadow-partner-500/25'}`}>
-                      <span>✨</span> {showAI ? 'Ocultar Análise IA' : 'Analisar Finanças com IA'}
-                    </button>
-                  </div>
-
-                  {showAI && (
-                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-xl border border-blue-500/20 animate-slide-up">
-                      <h3 className="font-extrabold text-xl mb-6 flex items-center gap-2"><span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-partner-500">Relatório de Inteligência</span></h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {generateAIReport().map((r, idx) => {
-                          const styles = { 
-                            success: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-400', 
-                            warning: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-400', 
-                            danger: 'bg-rose-50 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-400', 
-                            info: 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-400' 
-                          };
-                          return (
-                            <div key={idx} className={`p-5 rounded-2xl border ${styles[r.type]}`}>
-                              <h4 className="font-bold mb-2 flex items-center gap-2"><span>{r.icon}</span> {r.title}</h4>
-                              <p className="text-sm font-medium opacity-90">{r.text}</p>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  )}
                 </div>
               )}
 
-              {/* === TRANSACTIONS === */}
               {activeTab === 'transactions' && (
                 <div className="space-y-6 animate-slide-up">
-                  <form onSubmit={handleSaveTx} className="glass-card p-6 md:p-8 rounded-3xl">
-                    <h3 className="font-extrabold text-xl mb-6">{txForm.id ? 'Editar Transação' : 'Nova Transação'}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <form onSubmit={handleSaveTx} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 top-0 w-64 h-64 bg-brand-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">{txForm.id ? 'Editar Transação' : 'Nova Transação Rápida'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 relative z-10">
                       <div className="md:col-span-2">
-                        <label htmlFor="tx-desc" className={labelClass}>Descrição</label>
-                        <input id="tx-desc" type="text" value={txForm.desc} onChange={e=>setTxForm({...txForm, desc: e.target.value})} className={`${inputClass} ${formErrors.tx.desc ? 'field-error' : ''}`} placeholder="Ex: Supermercado" required />
+                        <label htmlFor="tx-desc" className={labelClass}>O que foi?</label>
+                        <input id="tx-desc" type="text" value={txForm.desc} onChange={e=>setTxForm({...txForm, desc: e.target.value})} className={`${inputClass} ${formErrors.tx.desc ? 'field-error' : ''}`} placeholder="Ex: Supermercado" />
                         {formErrors.tx.desc && <div className="error-message">⚠️ {formErrors.tx.desc}</div>}
                       </div>
                       <div>
                         <label htmlFor="tx-value" className={labelClass}>Valor (R$)</label>
-                        <input id="tx-value" type="number" step="0.01" value={txForm.value} onChange={e=>setTxForm({...txForm, value: e.target.value})} className={`${inputClass} ${formErrors.tx.value ? 'field-error' : ''}`} placeholder="0,00" required />
+                        <input id="tx-value" type="number" step="0.01" value={txForm.value} onChange={e=>setTxForm({...txForm, value: e.target.value})} className={`${inputClass} ${formErrors.tx.value ? 'field-error' : ''}`} placeholder="0,00" />
                         {formErrors.tx.value && <div className="error-message">⚠️ {formErrors.tx.value}</div>}
                       </div>
                       <div>
                         <label htmlFor="tx-category" className={labelClass}>Categoria</label>
-                        <select id="tx-category" value={txForm.category} onChange={e=>setTxForm({...txForm, category: e.target.value})} className={inputClass}>
-                          {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
-                        </select>
+                        <select id="tx-category" value={txForm.category} onChange={e=>setTxForm({...txForm, category: e.target.value})} className={inputClass}>{predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}</select>
                       </div>
                       <div>
                         <label htmlFor="tx-type" className={labelClass}>Tipo</label>
-                        <select id="tx-type" value={txForm.type} onChange={e=>setTxForm({...txForm, type: e.target.value})} className={inputClass}>
-                          <option value="expense">Despesa</option><option value="income">Receita Extra</option>
-                        </select>
+                        <select id="tx-type" value={txForm.type} onChange={e=>setTxForm({...txForm, type: e.target.value})} className={inputClass}><option value="expense">Despesa</option><option value="income">Receita Extra</option></select>
                       </div>
                       <div>
                         <label htmlFor="tx-date" className={labelClass}>Data</label>
-                        <input id="tx-date" type="date" value={txForm.date} onChange={e=>setTxForm({...txForm, date: e.target.value})} className={inputClass} required />
+                        <input id="tx-date" type="date" value={txForm.date} onChange={e=>setTxForm({...txForm, date: e.target.value})} className={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`} />
                       </div>
-                      <div>
-                        <label htmlFor="tx-scope" className={labelClass}>Escopo</label>
-                        <select id="tx-scope" value={txForm.scope} onChange={e=>setTxForm({...txForm, scope: e.target.value})} className={inputClass}>
-                          <option value="joint">Despesa Conjunta</option><option value="A">Individual: {settings.nameA}</option><option value="B">Individual: {settings.nameB}</option>
-                        </select>
-                      </div>
-                      {txForm.scope === 'joint' && (
-                        <div>
-                          <label htmlFor="tx-paidBy" className={labelClass}>Pago por</label>
-                          <select id="tx-paidBy" value={txForm.paidBy} onChange={e=>setTxForm({...txForm, paidBy: e.target.value})} className={inputClass}>
-                            <option value="A">{settings.nameA}</option><option value="B">{settings.nameB}</option>
-                          </select>
+                      <div className="md:col-span-2 flex gap-4">
+                        <div className="flex-1">
+                          <label htmlFor="tx-scope" className={labelClass}>Escopo</label>
+                          <select id="tx-scope" value={txForm.scope} onChange={e=>setTxForm({...txForm, scope: e.target.value})} className={inputClass}><option value="joint">Despesa Conjunta</option><option value="A">Individual: {settings.nameA}</option><option value="B">Individual: {settings.nameB}</option></select>
                         </div>
-                      )}
-                      <div className="col-span-full flex gap-3 mt-2">
-                        {txForm.id && <button type="button" onClick={()=>{setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'joint', paidBy: 'A' }); setFormErrors(prev => ({...prev, tx: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">Cancelar</button>}
-                        <button type="submit" className="flex-1 bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 hover:shadow-brand-500/40 hover:-translate-y-0.5 transition-all">Salvar Transação</button>
+                        {txForm.scope === 'joint' && (
+                          <div className="flex-1">
+                            <label htmlFor="tx-paidBy" className={labelClass}>Pago por</label>
+                            <select id="tx-paidBy" value={txForm.paidBy} onChange={e=>setTxForm({...txForm, paidBy: e.target.value})} className={inputClass}><option value="A">{settings.nameA}</option><option value="B">{settings.nameB}</option></select>
+                          </div>
+                        )}
+                      </div>
+                      <div className="col-span-full flex justify-end gap-3 mt-2">
+                        {txForm.id && <button type="button" onClick={()=>{setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'joint', paidBy: 'A' }); setFormErrors(prev => ({...prev, tx: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:shadow-[0_15px_30px_rgba(20,184,166,0.4)] hover:-translate-y-0.5 transition-all">Salvar Lançamento</button>
                       </div>
                     </div>
                   </form>
                   
-                  <BentoCard title={`Registos de ${monthFilter}`}>
-                    <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 custom-scrollbar">
-                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400">Nenhum registo neste mês.</p> : filteredTransactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t => (
-                        <div key={t.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/50 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group">
+                  <BentoCard title={`Histórico de ${monthFilter}`}>
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400 font-medium">Lousa limpa. Sem registos neste mês.</p> : filteredTransactions.sort((a,b)=>new Date(b.date)-new Date(a.date)).map((t, index) => (
+                        <div key={t.id} className="flex justify-between items-center p-5 rounded-2xl bg-slate-100/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
                           <div>
-                            <p className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100">{t.desc} {t.autoType && <span className="text-[9px] bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase font-black tracking-wider">Auto</span>}</p>
-                            <p className="text-xs text-slate-500 mt-1">{t.category} &bull; {t.date.split('-').reverse().join('/')} &bull; <span className="uppercase text-[9px] font-bold bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">{t.scope==='joint'?'Conjunta':t.scope}</span></p>
+                            <p className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100 text-base">{t.desc} {t.autoType && <span className="text-[9px] bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm">Auto</span>}</p>
+                            <p className="text-xs text-slate-500 mt-1 font-medium">{t.category} &bull; {t.date.split('-').reverse().join('/')} &bull; <span className="uppercase text-[9px] font-bold bg-slate-200 dark:bg-slate-700 px-1.5 py-0.5 rounded text-slate-600 dark:text-slate-300">{t.scope==='joint'?'Conjunto':t.scope}</span></p>
                           </div>
-                          <div className="flex items-center gap-4">
-                            <span className={`font-black text-lg ${t.type==='income'?'text-brand-600 dark:text-brand-400':'text-slate-800 dark:text-white'}`}>{t.type==='income'?'+':'-'}{formatMoney(t.value)}</span>
-                            <div className="opacity-0 group-hover:opacity-100 flex gap-1 transition-opacity">
-                              <button type="button" onClick={()=>setTxForm(t)} className="p-2 bg-slate-200 hover:bg-brand-500 hover:text-white dark:bg-slate-700 rounded-lg transition-colors" aria-label="Editar">✏️</button>
-                              <button type="button" onClick={()=>handleDelete('tx', t.id)} className="p-2 bg-slate-200 hover:bg-rose-500 hover:text-white dark:bg-slate-700 rounded-lg transition-colors" aria-label="Excluir">🗑️</button>
+                          <div className="flex items-center gap-5">
+                            <span className={`font-black text-lg drop-shadow-sm ${t.type==='income'?'text-brand-500 dark:text-brand-400':'text-slate-800 dark:text-white'}`}>{t.type==='income'?'+':'-'}{formatMoney(t.value)}</span>
+                            <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                              <button type="button" onClick={()=>setTxForm(t)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-brand-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Editar transação">✏️</button>
+                              <button type="button" onClick={()=>handleDelete('tx', t.id)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Excluir transação">🗑️</button>
                             </div>
                           </div>
                         </div>
@@ -660,120 +701,124 @@
                 </div>
               )}
 
-              {/* === SUBSCRIPTIONS === */}
               {activeTab === 'subscriptions' && (
                 <div className="space-y-6 animate-slide-up">
-                  <form onSubmit={handleSaveSub} className="glass-card p-6 md:p-8 rounded-3xl">
-                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-                      <h3 className="font-extrabold text-xl">{subForm.id ? 'Editar Assinatura' : 'Nova Assinatura Fixa'}</h3>
-                      <div className="mt-4 md:mt-0 px-4 py-2 bg-rose-100 dark:bg-rose-900/30 rounded-xl border border-rose-200 dark:border-rose-800">
-                        <p className="text-[10px] text-rose-600 dark:text-rose-400 font-bold uppercase tracking-wider mb-1">Custo Fixo Mensal</p>
-                        <p className="font-black text-rose-700 dark:text-rose-300 text-lg">{formatMoney(totalSubscriptions)}</p>
+                  <form onSubmit={handleSaveSub} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 bottom-0 w-64 h-64 bg-partner-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 relative z-10">
+                      <h3 className="font-extrabold text-xl">{subForm.id ? 'Editar Assinatura' : 'Nova Automação de Custo Fixo'}</h3>
+                      <div className="mt-4 md:mt-0 px-5 py-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 dark:border-rose-800/50 shadow-inner">
+                        <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mb-1">Custo Fixo Mensal</p>
+                        <p className="font-black text-rose-600 dark:text-rose-400 text-xl">{formatMoney(totalSubscriptions)}</p>
                       </div>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 items-end relative z-10">
                       <div className="lg:col-span-2">
-                        <label htmlFor="sub-desc" className={labelClass}>Serviço</label>
-                        <input id="sub-desc" type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className={`${inputClass} ${formErrors.sub.desc ? 'field-error' : ''}`} placeholder="Ex: Netflix, Spotify" required />
+                        <label htmlFor="sub-desc" className={labelClass}>Serviço / Conta</label>
+                        <input id="sub-desc" type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className={`${inputClass} ${formErrors.sub.desc ? 'field-error' : ''}`} placeholder="Ex: Energia Elétrica, Spotify" />
                         {formErrors.sub.desc && <div className="error-message">⚠️ {formErrors.sub.desc}</div>}
                       </div>
                       <div>
-                        <label htmlFor="sub-value" className={labelClass}>Valor (R$)</label>
-                        <input id="sub-value" type="number" step="0.01" value={subForm.value} onChange={e=>setSubForm({...subForm, value: e.target.value})} className={`${inputClass} ${formErrors.sub.value ? 'field-error' : ''}`} placeholder="0,00" required />
+                        <label htmlFor="sub-value" className={labelClass}>Valor Mensal (R$)</label>
+                        <input id="sub-value" type="number" step="0.01" value={subForm.value} onChange={e=>setSubForm({...subForm, value: e.target.value})} className={`${inputClass} ${formErrors.sub.value ? 'field-error' : ''}`} placeholder="0,00" />
                         {formErrors.sub.value && <div className="error-message">⚠️ {formErrors.sub.value}</div>}
                       </div>
                       <div>
+                        <label htmlFor="sub-category" className={labelClass}>Categoria</label>
+                        <select id="sub-category" value={subForm.category} onChange={e=>setSubForm({...subForm, category: e.target.value})} className={inputClass}>{predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                      </div>
+                      <div>
                         <label htmlFor="sub-day" className={labelClass}>Dia Venc.</label>
-                        <input id="sub-day" type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.sub.dayOfMonth ? 'field-error' : ''} text-center`} required />
+                        <input id="sub-day" type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.sub.dayOfMonth ? 'field-error' : ''} text-center`} />
                         {formErrors.sub.dayOfMonth && <div className="error-message">⚠️ {formErrors.sub.dayOfMonth}</div>}
                       </div>
-                      <div className="col-span-full flex justify-end gap-3 mt-2">
-                        {subForm.id && <button type="button" onClick={()=>{setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 }); setFormErrors(prev => ({...prev, sub: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold">Cancelar</button>}
-                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Salvar</button>
+                      <div className="col-span-full flex justify-end gap-3 mt-4">
+                        {subForm.id && <button type="button" onClick={()=>{setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 }); setFormErrors(prev => ({...prev, sub: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar Automação</button>
                       </div>
                     </div>
                   </form>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhuma assinatura cadastrada.</div> : subscriptions.map(s => (
-                      <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-300 ${s.active ? 'hover:-translate-y-1 hover:shadow-xl' : 'opacity-60 grayscale-[0.5]'}`}>
+                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhum custo fixo automatizado.</div> : subscriptions.map((s, idx) => (
+                      <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl border-white/60 dark:border-white/10' : 'opacity-50 grayscale border-slate-300 dark:border-slate-700'}`} style={{ animationDelay: `${idx * 100}ms` }}>
                         <div className="flex justify-between items-start mb-6">
                           <div><h4 className="font-extrabold text-lg text-slate-800 dark:text-white">{s.desc}</h4><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p></div>
-                          <div className="flex gap-1">
-                            <button onClick={()=>setSubForm(s)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">✏️</button>
-                            <button onClick={()=>handleDelete('sub', s.id)} className="p-2 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 rounded-lg transition-colors">🗑️</button>
+                          <div className="flex gap-2">
+                            <button onClick={()=>setSubForm(s)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-colors" aria-label="Editar assinatura">✏️</button>
+                            <button onClick={()=>handleDelete('sub', s.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors" aria-label="Excluir assinatura">🗑️</button>
                           </div>
                         </div>
                         <div className="flex justify-between items-end mb-6">
-                          <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Valor</p><p className="font-black text-2xl text-slate-800 dark:text-white">{formatMoney(s.value)}</p></div>
-                          <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Dia</p><p className="font-black text-xl text-brand-500">{s.dayOfMonth}</p></div>
+                          <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Valor</p><p className="font-black text-3xl tracking-tight text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(s.value)}</p></div>
+                          <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Dia</p><p className="font-black text-xl text-brand-500 drop-shadow-sm">{s.dayOfMonth}</p></div>
                         </div>
-                        <button onClick={()=>setSubscriptions(prev=>prev.map(x=>x.id===s.id?{...x,active:!x.active,updatedAt:Date.now()}:x))} className={`w-full py-3 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-lg shadow-brand-500/25'}`}>{s.active ? 'Pausar' : 'Reativar'}</button>
+                        <button onClick={()=>setSubscriptions(prev=>prev.map(x=>x.id===s.id?{...x,active:!x.active,updatedAt:Date.now()}:x))} className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-[0_10px_20px_rgba(20,184,166,0.3)]'}`}>{s.active ? 'Pausar Automação' : 'Reativar'}</button>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* === INSTALLMENTS === */}
               {activeTab === 'installments' && (
                 <div className="space-y-6 animate-slide-up">
-                  <form onSubmit={handleSaveInst} className="glass-card p-6 md:p-8 rounded-3xl">
-                    <h3 className="font-extrabold text-xl mb-6">{instForm.id ? 'Editar Parcelamento' : 'Novo Parcelamento'}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end">
+                  <form onSubmit={handleSaveInst} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                     <div className="absolute left-0 bottom-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">{instForm.id ? 'Editar Parcelamento' : 'Novo Parcelamento'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-5 items-end relative z-10">
                       <div className="lg:col-span-2">
-                        <label htmlFor="inst-desc" className={labelClass}>Descrição da Compra</label>
-                        <input id="inst-desc" type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} placeholder="Ex: iPhone 15" required />
+                        <label htmlFor="inst-desc" className={labelClass}>Compra (Ex: iPhone)</label>
+                        <input id="inst-desc" type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} />
                         {formErrors.inst.desc && <div className="error-message">⚠️ {formErrors.inst.desc}</div>}
                       </div>
                       <div>
-                        <label htmlFor="inst-val" className={labelClass}>Valor Parcela (R$)</label>
-                        <input id="inst-val" type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} placeholder="0,00" required />
+                        <label htmlFor="inst-val" className={labelClass}>Valor da Parcela (R$)</label>
+                        <input id="inst-val" type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} placeholder="0,00" />
                         {formErrors.inst.installmentValue && <div className="error-message">⚠️ {formErrors.inst.installmentValue}</div>}
                       </div>
                       <div>
-                        <label htmlFor="inst-tot" className={labelClass}>Total Parcelas</label>
-                        <input id="inst-tot" type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className={`${inputClass} ${formErrors.inst.totalInstallments ? 'field-error' : ''} text-center`} required />
+                        <label htmlFor="inst-tot" className={labelClass}>Total de Parcelas</label>
+                        <input id="inst-tot" type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className={`${inputClass} ${formErrors.inst.totalInstallments ? 'field-error' : ''} text-center`} />
                         {formErrors.inst.totalInstallments && <div className="error-message">⚠️ {formErrors.inst.totalInstallments}</div>}
                       </div>
                       <div>
-                        <label htmlFor="inst-paid" className={labelClass}>Já Pagas</label>
+                        <label htmlFor="inst-paid" className={labelClass}>Já Pagas (0 se nenhuma)</label>
                         <input id="inst-paid" type="number" min="0" value={instForm.paidInstallments} onChange={e=>setInstForm({...instForm, paidInstallments: e.target.value})} className={`${inputClass} text-center`} />
                       </div>
                       <div>
                         <label htmlFor="inst-day" className={labelClass}>Dia Venc.</label>
-                        <input id="inst-day" type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.inst.dayOfMonth ? 'field-error' : ''} text-center`} required />
+                        <input id="inst-day" type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.inst.dayOfMonth ? 'field-error' : ''} text-center`} />
                         {formErrors.inst.dayOfMonth && <div className="error-message">⚠️ {formErrors.inst.dayOfMonth}</div>}
                       </div>
-                      <div className="col-span-full flex justify-end gap-3 mt-2">
-                        {instForm.id && <button type="button" onClick={()=>{setInstForm({id:null,desc:'',installmentValue:'',paidInstallments:0,totalInstallments:2,dayOfMonth:1,category:'Dívidas'}); setFormErrors(prev => ({...prev, inst: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold">Cancelar</button>}
-                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Salvar</button>
+                      <div className="col-span-full flex justify-end gap-3 mt-4">
+                        {instForm.id && <button type="button" onClick={()=>{setInstForm({id:null,desc:'',installmentValue:'',paidInstallments:0,totalInstallments:2,dayOfMonth:1,category:'Dívidas'}); setFormErrors(prev => ({...prev, inst: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar Parcelamento</button>
                       </div>
                     </div>
                   </form>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {installments.length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhum parcelamento ativo.</div> : installments.map(i => {
-                      const cur = Math.min(i.paidInstallments || 0, i.totalInstallments);
-                      const pct = i.totalInstallments > 0 ? (cur / i.totalInstallments) * 100 : 0;
+                    {installments.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhum parcelamento ativo. Que paz! 🕊️</div> : installments.map((i, idx) => {
+                      const cur = Math.min(parseInt(i.paidInstallments) || 0, parseInt(i.totalInstallments));
+                      const pct = i.totalInstallments > 0 ? (cur / parseInt(i.totalInstallments)) * 100 : 0;
                       return (
-                        <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all duration-300 ${i.active ? 'hover:-translate-y-1 hover:shadow-xl' : 'opacity-70'}`}>
-                          <div className="flex justify-between items-start mb-4">
+                        <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${i.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70'}`} style={{ animationDelay: `${idx * 100}ms` }}>
+                          <div className="flex justify-between items-start mb-6">
                             <h4 className="font-extrabold text-lg text-slate-800 dark:text-white">{i.desc}</h4>
-                            <div className="flex gap-1">
-                              <button onClick={()=>setInstForm(i)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">✏️</button>
-                              <button onClick={()=>handleDelete('inst', i.id)} className="p-2 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 rounded-lg transition-colors">🗑️</button>
+                            <div className="flex gap-2">
+                              <button onClick={()=>setInstForm(i)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-colors" aria-label="Editar parcelamento">✏️</button>
+                              <button onClick={()=>handleDelete('inst', i.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors" aria-label="Excluir parcelamento">🗑️</button>
                             </div>
                           </div>
-                          <div className="mb-5">
-                            <div className="flex justify-between text-xs font-bold text-slate-500 mb-2"><span>Progresso: {cur}/{i.totalInstallments}</span><span>{pct.toFixed(0)}%</span></div>
-                            <div className="w-full h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${i.active ? 'bg-gradient-to-r from-brand-400 to-brand-600' : 'bg-emerald-500'}`} style={{width: `${pct}%`}}></div>
+                          <div className="mb-6">
+                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2"><span>Progresso: {cur}/{i.totalInstallments}</span><span className={pct===100?'text-emerald-500':''}>{pct.toFixed(0)}%</span></div>
+                            <div className="w-full h-2.5 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${i.active ? 'bg-gradient-to-r from-brand-400 to-brand-600 shadow-[0_0_10px_rgba(20,184,166,0.5)]' : 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.5)]'}`} style={{width: `${pct}%`}}></div>
                             </div>
                           </div>
                           <div className="flex justify-between items-end">
-                            <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Parcela</p><p className="font-black text-xl text-slate-800 dark:text-white">{formatMoney(i.installmentValue)}</p><p className="text-[10px] text-slate-500 font-medium mt-1">Total: {formatMoney(i.installmentValue * i.totalInstallments)}</p></div>
-                            <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Venc.</p><p className="font-black text-lg text-brand-500">Dia {i.dayOfMonth}</p></div>
+                            <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Parcela</p><p className="font-black text-2xl text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(i.installmentValue)}</p><p className="text-[10px] text-slate-500 font-bold mt-1">Total: {formatMoney(i.installmentValue * i.totalInstallments)}</p></div>
+                            <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Venc.</p><p className="font-black text-xl text-brand-500 drop-shadow-sm">Dia {i.dayOfMonth}</p></div>
                           </div>
                         </div>
                       )
@@ -782,53 +827,53 @@
                 </div>
               )}
 
-              {/* === GOALS === */}
               {activeTab === 'goals' && (
                 <div className="space-y-6 animate-slide-up">
-                  <form onSubmit={handleSaveGoal} className="glass-card p-6 md:p-8 rounded-3xl">
-                    <h3 className="font-extrabold text-xl mb-6">{goalForm.id ? 'Atualizar Meta' : 'Nova Meta Financeira'}</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
-                      <div className="md:col-span-1">
-                        <label htmlFor="goal-name" className={labelClass}>Objetivo</label>
-                        <input id="goal-name" type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className={`${inputClass} ${formErrors.goal.name ? 'field-error' : ''}`} placeholder="Ex: Viagem" required />
+                  <form onSubmit={handleSaveGoal} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 bottom-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">{goalForm.id ? 'Atualizar Meta' : 'Nova Meta Financeira'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-5 items-end relative z-10">
+                      <div className="md:col-span-2">
+                        <label htmlFor="goal-name" className={labelClass}>Objetivo (Ex: Carro Novo)</label>
+                        <input id="goal-name" type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className={`${inputClass} ${formErrors.goal.name ? 'field-error' : ''}`} />
                         {formErrors.goal.name && <div className="error-message">⚠️ {formErrors.goal.name}</div>}
                       </div>
                       <div>
                         <label htmlFor="goal-target" className={labelClass}>Alvo (R$)</label>
-                        <input id="goal-target" type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className={`${inputClass} ${formErrors.goal.target ? 'field-error' : ''}`} placeholder="0,00" required />
+                        <input id="goal-target" type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className={`${inputClass} ${formErrors.goal.target ? 'field-error' : ''}`} />
                         {formErrors.goal.target && <div className="error-message">⚠️ {formErrors.goal.target}</div>}
                       </div>
                       <div>
                         <label htmlFor="goal-current" className={labelClass}>Já Guardado (R$)</label>
-                        <input id="goal-current" type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className={inputClass} placeholder="0,00" />
+                        <input id="goal-current" type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className={inputClass} />
                       </div>
-                      <div className="col-span-full flex gap-3 justify-end mt-2">
-                        {goalForm.id && <button type="button" onClick={()=>{setGoalForm({id:null,name:'',target:'',current:'0'}); setFormErrors(prev => ({...prev, goal: {}}));}} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 rounded-xl font-bold">Cancelar</button>}
-                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Salvar Meta</button>
+                      <div className="col-span-full flex gap-3 justify-end mt-4">
+                        {goalForm.id && <button type="button" onClick={()=>{setGoalForm({id:null,name:'',target:'',current:'0'}); setFormErrors(prev => ({...prev, goal: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar Meta</button>
                       </div>
                     </div>
                   </form>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {goals.length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhuma meta registada.</div> : goals.map(g => {
+                    {goals.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma meta. Aponte para as estrelas! ✨</div> : goals.map((g, idx) => {
                       const pct = Math.min(100, (g.current / g.target) * 100);
                       return (
-                        <div key={g.id} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                        <div key={g.id} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
                           <div>
-                            <div className="flex justify-between items-start mb-3">
+                            <div className="flex justify-between items-start mb-4">
                               <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{g.name}</h3>
-                              <div className="flex gap-1">
-                                <button onClick={()=>setGoalForm(g)} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg transition-colors">✏️</button>
-                                <button onClick={()=>handleDelete('goal', g.id)} className="p-2 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/30 rounded-lg transition-colors">🗑️</button>
+                              <div className="flex gap-2">
+                                <button onClick={()=>setGoalForm(g)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-colors" aria-label="Editar meta">✏️</button>
+                                <button onClick={()=>handleDelete('goal', g.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors" aria-label="Excluir meta">🗑️</button>
                               </div>
                             </div>
-                            <p className="text-xs text-slate-500 font-medium mb-4"><span className="font-bold text-slate-700 dark:text-slate-300 text-base">{formatMoney(g.current)}</span> de {formatMoney(g.target)}</p>
+                            <p className="text-xs text-slate-500 font-medium mb-6"><span className="font-black text-slate-800 dark:text-slate-200 text-2xl drop-shadow-sm mr-1">{formatMoney(g.current)}</span> de {formatMoney(g.target)}</p>
                           </div>
                           <div>
-                            <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
-                              <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000 ease-out rounded-full" style={{ width: `${pct}%` }}></div>
+                            <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
+                              <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000 ease-out rounded-full shadow-[0_0_10px_rgba(20,184,166,0.5)]" style={{ width: `${pct}%` }}></div>
                             </div>
-                            <div className="text-right text-[10px] font-black text-brand-500 tracking-wider">{pct.toFixed(1)}% CONCLUÍDO</div>
+                            <div className="text-right text-[10px] font-black tracking-widest text-brand-500">{pct.toFixed(1)}% CONCLUÍDO</div>
                           </div>
                         </div>
                       );
@@ -837,7 +882,6 @@
                 </div>
               )}
 
-              {/* === BUDGETS === */}
               {activeTab === 'budgets' && (
                 <div className="space-y-6 animate-slide-up">
                   <form onSubmit={(e) => {
@@ -849,42 +893,40 @@
                     setBudgetForm({ category: 'Alimentação', limit: '' }); 
                     setFormErrors(prev => ({...prev, budget: {}}));
                     showToast("Orçamento definido.");
-                  }} className="glass-card p-6 md:p-8 rounded-3xl">
-                    <h3 className="font-extrabold text-xl mb-6">Orçamentos Mensais</h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
+                  }} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 top-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">Orçamentos Mensais Rigorosos</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end relative z-10">
                       <div>
-                        <label htmlFor="budget-cat" className={labelClass}>Categoria</label>
-                        <select id="budget-cat" value={budgetForm.category} onChange={e=>setBudgetForm({...budgetForm, category: e.target.value})} className={inputClass}>
-                          {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
-                        </select>
+                        <label htmlFor="budget-cat" className={labelClass}>Categoria Alvo</label>
+                        <select id="budget-cat" value={budgetForm.category} onChange={e=>setBudgetForm({...budgetForm, category: e.target.value})} className={inputClass}>{predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}</select>
                       </div>
                       <div>
-                        <label htmlFor="budget-limit" className={labelClass}>Limite Máximo (R$)</label>
-                        <input id="budget-limit" type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`${inputClass} ${formErrors.budget.limit ? 'field-error' : ''}`} placeholder="0,00" required />
+                        <label htmlFor="budget-limit" className={labelClass}>Teto de Gasto (R$)</label>
+                        <input id="budget-limit" type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`${inputClass} ${formErrors.budget.limit ? 'field-error' : ''}`} />
                         {formErrors.budget.limit && <div className="error-message">⚠️ {formErrors.budget.limit}</div>}
                       </div>
-                      <button type="submit" className="bg-brand-500 text-white font-bold py-3 rounded-xl shadow-lg shadow-brand-500/25 hover:bg-brand-600 transition-all">Definir Orçamento</button>
+                      <button type="submit" className="bg-brand-500 text-white font-bold py-3 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Travar Orçamento</button>
                     </div>
                   </form>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {Object.keys(budgets).length === 0 ? <div className="col-span-full glass-card p-10 rounded-3xl text-center text-slate-400">Nenhum orçamento definido.</div> : Object.entries(budgets).map(([cat, limit]) => {
+                    {Object.keys(budgets).length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhum limite definido. Cuidado com os gastos excessivos.</div> : Object.entries(budgets).map(([cat, limit], idx) => {
                       const spent = categoriesTotal[cat]?.val || 0; const pct = Math.min(100, (spent / limit) * 100); const isOver = spent > limit;
                       return (
-                        <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-xl transition-all duration-300">
+                        <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
                           <div>
-                            <div className="flex justify-between items-start mb-3">
+                            <div className="flex justify-between items-start mb-4">
                               <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{cat}</h3>
-                              <button type="button" onClick={()=>{const b={...budgets}; delete b[cat]; setBudgets(b); setBudgetsMeta({ updatedAt: Date.now() });}} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/20 rounded-lg transition-colors" aria-label="Remover">🗑️</button>
+                              <button type="button" onClick={()=>{const b={...budgets}; delete b[cat]; setBudgets(b); setBudgetsMeta({ updatedAt: Date.now() });}} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors" aria-label={`Remover orçamento de ${cat}`}>🗑️</button>
                             </div>
-                            <p className="text-sm font-medium mb-4 text-slate-600 dark:text-slate-300">Gasto: <span className="font-bold">{formatMoney(spent)}</span> / {formatMoney(limit)}</p>
+                            <p className="text-sm font-medium mb-6 text-slate-600 dark:text-slate-300">Consumido: <span className={`font-black text-xl drop-shadow-sm ${isOver?'text-rose-500':''}`}>{formatMoney(spent)}</span> de {formatMoney(limit)}</p>
                           </div>
                           <div>
-                            <div className="w-full h-3 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mb-2">
-                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isOver ? 'bg-rose-500' : 'bg-brand-500'}`} style={{ width: `${pct}%` }}></div>
+                            <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isOver ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-brand-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]'}`} style={{ width: `${pct}%` }}></div>
                             </div>
-                            <div className={`text-right text-[10px] font-black tracking-wider ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>{pct.toFixed(1)}% UTILIZADO</div>
-                            {isOver && <div className="mt-2 text-rose-500 text-xs font-bold flex items-center gap-1">⚠️ Limite ultrapassado!</div>}
+                            <div className={`text-right text-[10px] font-black tracking-widest ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>{pct.toFixed(1)}% {isOver ? 'ESTOURADO' : 'UTILIZADO'}</div>
                           </div>
                         </div>
                       );
@@ -893,72 +935,57 @@
                 </div>
               )}
 
-              {/* === SYNC & CONFIG === */}
               {activeTab === 'sync' && (
-                <div className="space-y-6 animate-slide-up">
-                  <BentoCard title="Configurações do Casal" icon="👥" className="border-t-4 border-t-emerald-500">
+                <div className="space-y-6 animate-slide-up max-w-4xl mx-auto">
+                  <BentoCard title="Estrutura de Casal" icon="👥">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <div className="p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <h3 className="font-bold mb-4 text-brand-600 flex items-center gap-2">👤 {settings.nameA || 'Pessoa A'}</h3>
-                        <label className={labelClass}>Nome</label>
-                        <input type="text" value={settings.nameA} onChange={e=>setSettings({...settings, nameA: e.target.value, updatedAt: Date.now()})} className={`${inputClass} mb-4 font-bold`} placeholder="Nome" />
-                        <label className={labelClass}>Salário Mensal (R$)</label>
-                        <input type="number" step="0.01" value={settings.salaryA} onChange={e=>setSettings({...settings, salaryA: e.target.value, updatedAt: Date.now()})} className={inputClass} placeholder="0,00" />
+                      <div className="p-6 bg-slate-100/50 dark:bg-slate-800/30 rounded-3xl border border-slate-200/50 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                        <h3 className="font-bold mb-5 text-brand-600 flex items-center gap-2 text-sm uppercase tracking-wider">👤 {settings.nameA || 'Pessoa A'}</h3>
+                        <label htmlFor="nameA" className={labelClass}>Nome</label>
+                        <input id="nameA" type="text" value={settings.nameA} onChange={e=>setSettings({...settings, nameA: e.target.value, updatedAt: Date.now()})} className={`${inputClass} mb-4 font-bold`} />
+                        <label htmlFor="salaryA" className={labelClass}>Salário Base (R$)</label>
+                        <input id="salaryA" type="number" step="0.01" value={settings.salaryA} onChange={e=>setSettings({...settings, salaryA: e.target.value, updatedAt: Date.now()})} className={inputClass} />
                       </div>
-                      <div className="p-6 bg-slate-100 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700">
-                        <h3 className="font-bold mb-4 text-partner-600 flex items-center gap-2">👤 {settings.nameB || 'Pessoa B'}</h3>
-                        <label className={labelClass}>Nome</label>
-                        <input type="text" value={settings.nameB} onChange={e=>setSettings({...settings, nameB: e.target.value, updatedAt: Date.now()})} className={`${inputClass} mb-4 font-bold`} placeholder="Nome" />
-                        <label className={labelClass}>Salário Mensal (R$)</label>
-                        <input type="number" step="0.01" value={settings.salaryB} onChange={e=>setSettings({...settings, salaryB: e.target.value, updatedAt: Date.now()})} className={inputClass} placeholder="0,00" />
+                      <div className="p-6 bg-slate-100/50 dark:bg-slate-800/30 rounded-3xl border border-slate-200/50 dark:border-slate-700/50 hover:bg-white dark:hover:bg-slate-800 transition-colors">
+                        <h3 className="font-bold mb-5 text-partner-600 flex items-center gap-2 text-sm uppercase tracking-wider">👤 {settings.nameB || 'Pessoa B'}</h3>
+                        <label htmlFor="nameB" className={labelClass}>Nome</label>
+                        <input id="nameB" type="text" value={settings.nameB} onChange={e=>setSettings({...settings, nameB: e.target.value, updatedAt: Date.now()})} className={`${inputClass} mb-4 font-bold`} />
+                        <label htmlFor="salaryB" className={labelClass}>Salário Base (R$)</label>
+                        <input id="salaryB" type="number" step="0.01" value={settings.salaryB} onChange={e=>setSettings({...settings, salaryB: e.target.value, updatedAt: Date.now()})} className={inputClass} />
                       </div>
                     </div>
                   </BentoCard>
 
-                  <BentoCard title="Sync Seguro (AES-GCM & CRDT)" icon="🔒" className="border-t-4 border-t-brand-500">
-                    <p className="text-sm text-slate-500 mb-6 leading-relaxed">Os dados são encriptados ponta-a-ponta. Definam a <strong>MESMA senha</strong> nos dois dispositivos para fundir os dados com segurança militar.</p>
-                    <div className="max-w-md mb-6">
-                      <label className={labelClass}>Senha Secreta do Casal</label>
-                      <input type="password" value={syncPassword} onChange={e=>setSyncPassword(e.target.value)} className={`${inputClass} font-mono tracking-widest`} placeholder="••••••••" />
+                  <BentoCard title="Ponte de Sincronização (AES-GCM)" icon="🔒">
+                    <p className="text-sm text-slate-500 mb-6 leading-relaxed font-medium">Padrão militar. Defina a <strong>mesma palavra-passe</strong> em ambos os dispositivos para criar o túnel de sincronização CRDT impenetrável.</p>
+                    <div className="max-w-md mb-8">
+                      <label htmlFor="sync-password" className={labelClass}>Palavra-Passe do Casal</label>
+                      <input id="sync-password" type="password" value={syncPassword} onChange={e=>setSyncPassword(e.target.value)} className={`${inputClass} font-mono tracking-widest shadow-inner`} placeholder="••••••••" />
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      <button onClick={handleGenerateSyncCode} className="bg-brand-500 text-white font-bold py-4 rounded-xl hover:bg-brand-600 transition-all shadow-lg shadow-brand-500/25 hover:shadow-brand-500/40 hover:-translate-y-0.5">1. Gerar Código e Copiar</button>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="flex flex-col justify-end">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Passo 1: No Dispositivo A</p>
+                        <button onClick={handleGenerateSyncCode} className="bg-brand-500 text-white font-bold py-4 rounded-2xl hover:-translate-y-1 transition-all shadow-[0_10px_20px_rgba(20,184,166,0.3)]">Gerar e Copiar Token</button>
+                      </div>
                       <div className="flex flex-col gap-3">
-                        <label className={labelClass}>Código do Parceiro</label>
-                        <textarea value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)} className={`${inputClass} h-16 text-xs font-mono resize-none`} placeholder="Cole o código criptografado aqui..."></textarea>
-                        <button onClick={handleImportSyncCode} className="bg-blue-600 text-white font-bold py-3 rounded-xl hover:bg-blue-700 transition-all shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 hover:-translate-y-0.5">2. Descriptografar & Fundir</button>
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Passo 2: No Dispositivo B</p>
+                        <label htmlFor="sync-code" className="sr-only">Código de sincronização</label>
+                        <textarea id="sync-code" value={syncCodeInput} onChange={e=>setSyncCodeInput(e.target.value)} className={`${inputClass} h-20 text-[10px] font-mono resize-none shadow-inner`} placeholder="Cole o token recebido aqui..."></textarea>
+                        <button onClick={handleImportSyncCode} className="bg-blue-600 text-white font-bold py-4 rounded-2xl hover:-translate-y-1 transition-all shadow-[0_10px_20px_rgba(37,99,235,0.3)]">Descriptografar & Fundir</button>
                       </div>
                     </div>
                   </BentoCard>
 
-                  <BentoCard className="flex flex-col md:flex-row gap-6 items-center justify-between">
+                  <BentoCard className="flex flex-col md:flex-row gap-6 items-center justify-between bg-gradient-to-r from-slate-100 to-white dark:from-slate-800/50 dark:to-slate-800/20">
                     <div>
-                      <h3 className="font-bold text-lg mb-1 flex items-center gap-2">📁 Dados Tradicionais (CSV)</h3>
-                      <p className="text-xs text-slate-500">Exporte para Excel ou importe o seu histórico manualmente.</p>
+                      <h3 className="font-extrabold text-lg mb-1 flex items-center gap-2">📁 Gestão Documental (CSV)</h3>
+                      <p className="text-xs text-slate-500 font-medium">Faça o backup clássico para Excel ou importe o seu histórico bancário.</p>
                     </div>
-                    <div className="flex gap-4">
-                      <button onClick={handleExportCSV} className="bg-emerald-500 text-white font-bold py-3 px-6 rounded-xl hover:bg-emerald-600 shadow-md shadow-emerald-500/20 transition-all hover:-translate-y-0.5">Exportar</button>
-                      <label className="bg-slate-200 text-slate-800 hover:bg-slate-300 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600 font-bold py-3 px-6 rounded-xl cursor-pointer shadow-md transition-all hover:-translate-y-0.5 flex items-center gap-2">
-                        📥 Importar <input type="file" accept=".csv" onChange={(e) => {
-                          const file = e.target.files[0]; if (!file) return;
-                          const reader = new FileReader();
-                          reader.onload = (evt) => {
-                            const lines = evt.target.result.split(/\r?\n/); let added = 0; const newTxs = [];
-                            for (let i = 1; i < lines.length; i++) {
-                              if (!lines[i].trim()) continue;
-                              const columns = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-                              if (columns.length >= 5) {
-                                const [date, type, category, desc, value] = columns.map(c => c.trim().replace(/^"|"$/g, ''));
-                                if (date && value && !isNaN(parseFloat(value))) {
-                                  newTxs.push({ id: generateId(), date, type: type === 'income' ? 'income' : 'expense', category, desc, value: parseFloat(value), scope: 'joint', paidBy: 'A', updatedAt: Date.now() });
-                                  added++;
-                                }
-                              }
-                            }
-                            if (added > 0) { setTransactions(prev => [...newTxs, ...prev]); showToast(`${added} importados!`); }
-                          }; reader.readAsText(file); e.target.value = '';
-                        }} className="hidden" />
+                    <div className="flex flex-wrap gap-4 w-full md:w-auto">
+                      <button onClick={handleExportCSV} className="flex-1 md:flex-none bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3 px-8 rounded-xl shadow-xl hover:-translate-y-0.5 transition-all">Baixar CSV</button>
+                      <label className="flex-1 md:flex-none bg-white dark:bg-slate-700 text-slate-800 dark:text-white font-bold py-3 px-8 rounded-xl cursor-pointer shadow-md hover:-translate-y-0.5 transition-all border border-slate-200 dark:border-slate-600 text-center">
+                        Subir CSV <input type="file" accept=".csv" onChange={handleImportCSV} className="hidden" />
                       </label>
                     </div>
                   </BentoCard>
@@ -968,11 +995,10 @@
             </div>
           </main>
           
-          {/* Toasts */}
           <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none" aria-live="polite">
             {toasts.map(t => (
-              <div key={t.id} className={`px-5 py-4 rounded-2xl shadow-2xl font-bold text-sm bg-white dark:bg-slate-800 border-l-4 animate-slide-up flex items-center gap-3 ${t.isError ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-brand-500 text-brand-600 dark:text-brand-400'}`}>
-                <span className="text-lg">{t.isError ? '⚠️' : '✅'}</span>
+              <div key={t.id} className={`px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-l-4 animate-slide-up flex items-center gap-3 ${t.isError ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-brand-500 text-brand-600 dark:text-brand-400'}`}>
+                <span className="text-xl drop-shadow-sm" aria-hidden="true">{t.isError ? '⚠️' : '✅'}</span>
                 {t.msg}
               </div>
             ))}
