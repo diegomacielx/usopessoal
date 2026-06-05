@@ -2106,12 +2106,17 @@
                             </div>
                           </div>
                           
-                          {/* NOVO: Status de pagamento */}
-                          {s.active && (
-                            <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold ${due.isLate ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800' : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'}`}>
-                              {due.isLate ? `⚠️ Atrasado há ${due.daysLate} dia${due.daysLate !== 1 ? 's' : ''}` : `✓ Vence em ${due.diffDays} dia${due.diffDays !== 1 ? 's' : ''} (dia ${s.dayOfMonth})`}
-                            </div>
-                          )}
+                          {/* Status de pagamento considerando lastPaidMonth */}
+{s.active && isPaidThisMonth && (
+  <div className="mb-4 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+    ✓ Paga este mês
+  </div>
+)}
+{s.active && !isPaidThisMonth && (
+  <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold ${due.isLate ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'}`}>
+    {due.isLate ? `⚠️ Atrasado há ${due.daysLate} dia${due.daysLate !== 1 ? 's' : ''}` : `📅 Vence em ${due.diffDays} dia${due.diffDays !== 1 ? 's' : ''} (dia ${s.dayOfMonth})`}
+  </div>
+)}
                           
                           <div className="flex justify-between items-end mb-4">
                             <div>
