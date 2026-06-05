@@ -1206,7 +1206,37 @@
         </div>
       );
     }
+    
+// ==================== LEITOR DE QR CODE (NFC-e) ====================
+    const NFCeScanner = ({ onScanSuccess, onCancel }) => {
+      useEffect(() => {
+        const html5QrcodeScanner = new Html5QrcodeScanner(
+          "qr-reader",
+          { fps: 10, qrbox: { width: 250, height: 250 } },
+          false
+        );
+        html5QrcodeScanner.render((decodedText) => {
+          html5QrcodeScanner.clear();
+          onScanSuccess(decodedText);
+        }, (error) => {
+          // Ignora erros de frame vazio enquanto procura o QR Code
+        });
 
+        return () => { html5QrcodeScanner.clear().catch(e => console.error(e)); };
+      }, [onScanSuccess]);
+
+      return (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl w-full max-w-md shadow-2xl relative animate-slide-up border border-slate-200 dark:border-slate-800">
+            <h3 className="font-extrabold text-xl mb-4 text-center text-slate-800 dark:text-white">📸 Escanear Nota Fiscal</h3>
+            <p className="text-xs text-slate-500 text-center mb-4">Aponte a câmera para o QR Code da NFC-e</p>
+            <div id="qr-reader" className="w-full overflow-hidden rounded-2xl border-2 border-brand-500/50 mb-4 bg-black/5"></div>
+            <button onClick={onCancel} className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg transition-all">Cancelar</button>
+          </div>
+        </div>
+      );
+    };
+    
     // ==================== DASHBOARD APP ====================
     function DashboardApp() {
       const { user, userData, coupleData, signOut, refreshUserData } = useAuth();
