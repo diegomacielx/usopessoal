@@ -96,6 +96,7 @@
       const d = new Date();
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     };
+    
     const formatMoney = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
     
     const generateId = () => {
@@ -115,66 +116,92 @@
 
     const predefinedCategories = ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Habitação', 'Educação', 'Vestuário', 'Pets', 'Assinaturas', 'Dívidas', 'Investimentos', 'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'];
 
-    const calcNextDue = (dayOfMonth) => {
+    // ALGORITMO ATUALIZADO: Suporta periodicidades (Bimestral, Trimestral, Anual) saltando os meses corretamente
+    const calcNextDue = (dayOfMonth, intervalMonths = 1, lastPaidMonthStr = null) => {
       const today = new Date();
-      const currentDay = today.getDate();
-      const currentMonth = today.getMonth();
-      const currentYear = today.getFullYear();
+      today.setHours(0, 0, 0, 0);
       
-      let dueDate = new Date(currentYear, currentMonth, dayOfMonth);
-      if (currentDay > dayOfMonth) {
-        dueDate = new Date(currentYear, currentMonth + 1, dayOfMonth);
+      let nextY = today.getFullYear();
+      let nextM = today.getMonth();
+
+      if (lastPaidMonthStr) {
+        const [y, m] = lastPaidMonthStr.split('-');
+        const lpDate = new Date(parseInt(y), parseInt(m) - 1, 1);
+        
+        // Pula exatamente a quantidade de meses da periodicidade
+        lpDate.setMonth(lpDate.getMonth() + parseInt(intervalMonths));
+        
+        nextY = lpDate.getFullYear();
+        nextM = lpDate.getMonth();
+      } else {
+        if (today.getDate() > dayOfMonth) {
+          nextM += 1;
+        }
       }
+
+      const dueDate = new Date(nextY, nextM, dayOfMonth);
+      dueDate.setHours(0, 0, 0, 0);
       
-      const diffTime = dueDate - today;
+      const diffTime = dueDate.getTime() - today.getTime();
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      const isLate = currentDay > dayOfMonth;
-      const daysLate = isLate ? currentDay - dayOfMonth : 0;
+      const isLate = diffDays < 0;
+      const daysLate = isLate ? Math.abs(diffDays) : 0;
       
       return { dueDate, diffDays, isLate, daysLate };
     };
 
     // ==================== DATA SERVICE ====================
     const DataService = {
+      // Auth
       signUp: async (email, password, name) => {
         const userCredential = await auth.createUserWithEmailAndPassword(email, password);
         const user = userCredential.user;
         await db.collection('users').doc(user.uid).set({
-          email, name,
+          email, 
+          name,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-          mode: null, coupleId: null, partnerId: null,
+          mode: null, 
+          coupleId: null, 
+          partnerId: null,
           settings: { salary: 0, currency: 'BRL', nameInCouple: 'Pessoa A' }
         });
         return user;
       },
+      
       signIn: async (email, password) => {
         const userCredential = await auth.signInWithEmailAndPassword(email, password);
         return userCredential.user;
       },
+      
       signOut: async () => await auth.signOut(),
       sendPasswordReset: async (email) => await auth.sendPasswordResetEmail(email),
+      
       getUserData: async (userId) => {
         const doc = await db.collection('users').doc(userId).get();
         return doc.exists ? { ...doc.data(), id: doc.id } : null;
       },
+      
       updateUser: async (userId, updates) => {
         await db.collection('users').doc(userId).update({
           ...updates,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       },
+      
       getCoupleData: async (coupleId) => {
         if (!coupleId) return null;
         const doc = await db.collection('couples').doc(coupleId).get();
         return doc.exists ? { ...doc.data(), id: doc.id } : null;
       },
+      
       updateCouple: async (coupleId, updates) => {
         await db.collection('couples').doc(coupleId).update({
           ...updates,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       },
+      
       regenerateInviteCode: async (coupleId) => {
         const newCode = generateInviteCode();
         await db.collection('couples').doc(coupleId).update({
@@ -183,31 +210,49 @@
         });
         return newCode;
       },
+      
       createCouple: async (currentUser, partnerEmail, nameInCouple) => {
         const partnerQuery = await db.collection('users').where('email', '==', partnerEmail).limit(1).get();
-        if (partnerQuery.empty) throw new Error('Este email não está cadastrado. Peça para seu parceiro criar uma conta primeiro.');
+        
+        if (partnerQuery.empty) {
+          throw new Error('Este email não está cadastrado. Peça para seu parceiro criar uma conta primeiro.');
+        }
         
         const partnerDoc = partnerQuery.docs[0];
         const partnerData = partnerDoc.data();
         const partnerId = partnerDoc.id;
         
-        if (partnerData.mode === 'couple') throw new Error('Este usuário já está em um casal.');
+        if (partnerData.mode === 'couple') {
+          throw new Error('Este usuário já está em um casal.');
+        }
         
         const inviteCode = generateInviteCode();
         const coupleRef = await db.collection('couples').add({
-          userA: currentUser.uid, userB: partnerId, inviteCode, inviteEmail: partnerEmail,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(), acceptedAt: null,
-          settings: { nameA: nameInCouple, nameB: partnerData.name || 'Pessoa B', salaryA: 0, salaryB: 0 }
+          userA: currentUser.uid,
+          userB: partnerId,
+          inviteCode,
+          inviteEmail: partnerEmail,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          acceptedAt: null,
+          settings: {
+            nameA: nameInCouple,
+            nameB: partnerData.name || 'Pessoa B',
+            salaryA: 0, 
+            salaryB: 0,
+          }
         });
         
         await db.collection('users').doc(currentUser.uid).update({
-          mode: 'couple', coupleId: coupleRef.id, partnerId: partnerId,
+          mode: 'couple',
+          coupleId: coupleRef.id,
+          partnerId: partnerId,
           'settings.nameInCouple': nameInCouple,
           updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
         return { coupleId: coupleRef.id, partnerId, inviteCode };
       },
+      
       acceptInviteByCode: async (currentUser, inviteCode) => {
         const allCouples = await db.collection('couples').get();
         
@@ -222,18 +267,17 @@
         
         const coupleData = coupleDoc.data();
         
-        // CORREÇÃO: Validação rigorosa por Email. Resolve contas recriadas e UIDs trocados.
+        // CORREÇÃO CRÍTICA DO FIREBASE: Validação rigorosa por Email para evitar "contas fantasmas".
         if (coupleData.inviteEmail.toLowerCase() !== currentUser.email.toLowerCase()) {
           throw new Error('Este código foi enviado para outro email. Verifique a conta conectada.');
         }
         
-        // Atualiza o convite e injeta o UID mais recente do parceiro no documento
+        // Atualiza o convite injetando o novo UID (caso a conta tenha sido recriada)
         await db.collection('couples').doc(coupleDoc.id).update({
           acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
-          userB: currentUser.uid 
+          userB: currentUser.uid
         });
         
-        // Atualiza o perfil do parceiro
         await db.collection('users').doc(currentUser.uid).update({
           mode: 'couple',
           coupleId: coupleDoc.id,
@@ -244,17 +288,29 @@
         
         return { coupleId: coupleDoc.id, partnerId: coupleData.userA };
       },
+      
       dissolveCouple: async (userId, coupleId) => {
         const coupleData = await DataService.getCoupleData(coupleId);
         if (!coupleData) return;
         
-        await db.collection('users').doc(coupleData.userA).update({ mode: 'solo', coupleId: null, partnerId: null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-        await db.collection('users').doc(coupleData.userB).update({ mode: 'solo', coupleId: null, partnerId: null, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        await db.collection('users').doc(coupleData.userA).update({
+          mode: 'solo', coupleId: null, partnerId: null,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        await db.collection('users').doc(coupleData.userB).update({
+          mode: 'solo', coupleId: null, partnerId: null,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
         
         const sharedTxs = await db.collection('transactions').where('coupleId', '==', coupleId).get();
-        for (const doc of sharedTxs.docs) await doc.ref.update({ scope: 'private', coupleId: null });
+        for (const doc of sharedTxs.docs) {
+          await doc.ref.update({ scope: 'private', coupleId: null });
+        }
+        
         await db.collection('couples').doc(coupleId).delete();
       },
+      
+      // ==================== BUSCA DE DADOS ====================
       getAllTransactions: async (userId, coupleId) => {
         const txs = [];
         const personalSnap = await db.collection('transactions').where('ownerId', '==', userId).get();
@@ -267,23 +323,38 @@
             if (data.ownerId !== userId) txs.push({ id: doc.id, ...data });
           });
         }
+        
         return txs.sort((a, b) => new Date(b.date) - new Date(a.date));
       },
+      
       addTransaction: async (txData) => {
         if (!txData.ownerId) throw new Error('ownerId obrigatório');
-        const docRef = await db.collection('transactions').add({ ...txData, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        const docRef = await db.collection('transactions').add({
+          ...txData,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
         return docRef.id;
       },
+      
       updateTransaction: async (txId, updates) => {
-        await db.collection('transactions').doc(txId).update({ ...updates, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        if (!txId) throw new Error('ID da transação ausente');
+        await db.collection('transactions').doc(txId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
       },
+      
       deleteTransaction: async (txId) => {
+        if (!txId) throw new Error('ID da transação ausente');
         await db.collection('transactions').doc(txId).delete();
       },
+      
       getCollection: async (collectionName, userId, coupleId) => {
         const items = [];
         const personalSnap = await db.collection(collectionName).where('ownerId', '==', userId).get();
         personalSnap.docs.forEach(doc => items.push({ ...doc.data(), id: doc.id }));
+        
         if (coupleId) {
           const sharedSnap = await db.collection(collectionName).where('coupleId', '==', coupleId).get();
           sharedSnap.docs.forEach(doc => {
@@ -291,44 +362,123 @@
             if (data.ownerId !== userId) items.push({ id: doc.id, ...data });
           });
         }
+        
         return items;
       },
+      
       addGoal: async (data) => {
-        const docRef = await db.collection('goals').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        if (!data.ownerId) throw new Error('ownerId obrigatório');
+        const docRef = await db.collection('goals').add({ 
+          ...data, 
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
         return docRef.id;
       },
-      updateGoal: async (id, data) => await db.collection('goals').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteGoal: async (id) => await db.collection('goals').doc(id).delete(),
+      
+      updateGoal: async (id, data) => {
+        if (!id) throw new Error('ID da meta inválido');
+        await db.collection('goals').doc(id).update({ 
+          ...data, 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
+      },
+      
+      deleteGoal: async (id) => {
+        if (!id) throw new Error('ID da meta inválido');
+        await db.collection('goals').doc(id).delete();
+      },
+      
       addSubscription: async (data) => {
-        const docRef = await db.collection('subscriptions').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        if (!data.ownerId) throw new Error('ownerId obrigatório');
+        const docRef = await db.collection('subscriptions').add({ 
+          ...data, 
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
         return docRef.id;
       },
-      updateSubscription: async (id, data) => await db.collection('subscriptions').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteSubscription: async (id) => await db.collection('subscriptions').doc(id).delete(),
+      
+      updateSubscription: async (id, data) => {
+        if (!id) throw new Error('ID da assinatura inválido');
+        await db.collection('subscriptions').doc(id).update({ 
+          ...data, 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
+      },
+      
+      deleteSubscription: async (id) => {
+        if (!id) throw new Error('ID da assinatura inválido');
+        await db.collection('subscriptions').doc(id).delete();
+      },
+      
       addInstallment: async (data) => {
-        const docRef = await db.collection('installments').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp(), updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        if (!data.ownerId) throw new Error('ownerId obrigatório');
+        const docRef = await db.collection('installments').add({ 
+          ...data, 
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(), 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
         return docRef.id;
       },
-      updateInstallment: async (id, data) => await db.collection('installments').doc(id).update({ ...data, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteInstallment: async (id) => await db.collection('installments').doc(id).delete(),
+      
+      updateInstallment: async (id, data) => {
+        if (!id) throw new Error('ID do parcelamento inválido');
+        await db.collection('installments').doc(id).update({ 
+          ...data, 
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp() 
+        });
+      },
+      
+      deleteInstallment: async (id) => {
+        if (!id) throw new Error('ID do parcelamento inválido');
+        await db.collection('installments').doc(id).delete();
+      },
+      
       getBudgets: async (ownerId) => {
         const snap = await db.collection('budgets').where('ownerId', '==', ownerId).get();
         const budgets = {};
-        snap.docs.forEach(doc => budgets[doc.data().category] = doc.data().limit);
+        snap.docs.forEach(doc => {
+          const data = doc.data();
+          budgets[data.category] = data.limit;
+        });
         return budgets;
       },
-      setBudget: async (ownerId, category, limit) => await db.collection('budgets').doc(`${ownerId}_${category}`).set({ ownerId, category, limit, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }),
-      deleteBudget: async (ownerId, category) => await db.collection('budgets').doc(`${ownerId}_${category}`).delete(),
-      addContribution: async (goalId, data) => await db.collection('goals').doc(goalId).collection('contributions').add({ ...data, createdAt: firebase.firestore.FieldValue.serverTimestamp() }),
+      
+      setBudget: async (ownerId, category, limit) => {
+        const budgetRef = db.collection('budgets').doc(`${ownerId}_${category}`);
+        await budgetRef.set({
+          ownerId, 
+          category, 
+          limit,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      deleteBudget: async (ownerId, category) => {
+        await db.collection('budgets').doc(`${ownerId}_${category}`).delete();
+      },
+      
+      addContribution: async (goalId, data) => {
+        if (!goalId) throw new Error('goalId ausente');
+        await db.collection('goals').doc(goalId).collection('contributions').add({
+          ...data,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
       getContributions: async (goalId) => {
+        if (!goalId) return [];
         const snap = await db.collection('goals').doc(goalId).collection('contributions').orderBy('date', 'desc').get();
         return snap.docs.map(d => ({ id: d.id, ...d.data() }));
       },
-      deleteContribution: async (goalId, contribId) => await db.collection('goals').doc(goalId).collection('contributions').doc(contribId).delete()
+      
+      deleteContribution: async (goalId, contribId) => {
+        if (!goalId || !contribId) throw new Error('IDs ausentes');
+        await db.collection('goals').doc(goalId).collection('contributions').doc(contribId).delete();
+      }
     };
-
-    // ==================== AUTH CONTEXT ====================
-    // ==================== AUTH CONTEXT ====================
+    // ==================== AUTH CONTEXT (ANTI-BLOQUEIO IPHONE) ====================
     const AuthContext = createContext();
 
     function AuthProvider({ children }) {
@@ -341,8 +491,12 @@
         try {
           const data = await DataService.getUserData(firebaseUser.uid);
           setUserData(data);
-          if (data?.coupleId) setCoupleData(await DataService.getCoupleData(data.coupleId));
-          else setCoupleData(null);
+          
+          if (data?.coupleId) {
+            setCoupleData(await DataService.getCoupleData(data.coupleId));
+          } else {
+            setCoupleData(null);
+          }
         } catch (error) {
           console.error("Erro ao carregar dados do usuário (possível bloqueio de navegador):", error);
         }
@@ -359,7 +513,9 @@
               setUser(firebaseUser);
               await loadUserData(firebaseUser);
             } else {
-              setUser(null); setUserData(null); setCoupleData(null);
+              setUser(null);
+              setUserData(null);
+              setCoupleData(null);
             }
           } catch (error) {
             console.error("Erro no Auth State:", error);
@@ -368,20 +524,45 @@
             setLoading(false);
           }
         });
+        
         return unsubscribe;
       }, []);
       
-      const refreshUserData = async () => { if (user) await loadUserData(user); };
+      const refreshUserData = async () => { 
+        if (user) await loadUserData(user); 
+      };
       
-      return <AuthContext.Provider value={{ user, userData, coupleData, loading, signIn: DataService.signIn, signUp: DataService.signUp, signOut: DataService.signOut, sendPasswordReset: DataService.sendPasswordReset, refreshUserData }}>{children}</AuthContext.Provider>;
+      return (
+        <AuthContext.Provider value={{ 
+          user, 
+          userData, 
+          coupleData, 
+          loading, 
+          signIn: DataService.signIn, 
+          signUp: DataService.signUp, 
+          signOut: DataService.signOut, 
+          sendPasswordReset: DataService.sendPasswordReset, 
+          refreshUserData 
+        }}>
+          {children}
+        </AuthContext.Provider>
+      );
     }
-    function useAuth() { return useContext(AuthContext); }
+
+    function useAuth() { 
+      return useContext(AuthContext); 
+    }
+
     // ==================== COMPONENTES VISUAIS ====================
     const BentoCard = ({ children, className = "", title, icon, action }) => (
       <div className={`glass-card p-6 rounded-3xl transition-all duration-300 hover:shadow-xl ${className}`}>
         {(title || action) && (
           <div className="flex justify-between items-start mb-5">
-            {title && <h3 className="font-bold text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">{icon} {title}</h3>}
+            {title && (
+              <h3 className="font-bold text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">
+                {icon} {title}
+              </h3>
+            )}
             {action}
           </div>
         )}
@@ -390,7 +571,14 @@
     );
 
     const DonutChart = memo(({ categoriesTotal }) => {
-      if (Object.keys(categoriesTotal).length === 0) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Sem dados para exibir</div>;
+      if (Object.keys(categoriesTotal).length === 0) {
+        return (
+          <div className="flex items-center justify-center h-48 text-slate-400 text-sm">
+            Sem dados para exibir
+          </div>
+        );
+      }
+      
       const sorted = Object.entries(categoriesTotal).sort((a,b) => b[1].val - a[1].val);
       const total = sorted.reduce((acc, curr) => acc + curr[1].val, 0);
       const colors = ['#14b8a6', '#8b5cf6', '#3b82f6', '#f43f5e', '#f59e0b', '#10b981', '#64748b'];
@@ -403,7 +591,21 @@
               {sorted.map(([cat, data], i) => {
                 const pct = (data.val / total) * 100;
                 const offset = sorted.slice(0, i).reduce((acc, curr) => acc + (curr[1].val / total) * 100, 0);
-                return <circle key={cat} cx="50" cy="50" r="40" fill="transparent" strokeWidth="10" stroke={colors[i % colors.length]} strokeDasharray={`${(pct / 100) * 251.2} 251.2`} strokeDashoffset={-(offset / 100) * 251.2} className="donut-segment" strokeLinecap="round" />;
+                return (
+                  <circle 
+                    key={cat} 
+                    cx="50" 
+                    cy="50" 
+                    r="40" 
+                    fill="transparent" 
+                    strokeWidth="10" 
+                    stroke={colors[i % colors.length]} 
+                    strokeDasharray={`${(pct / 100) * 251.2} 251.2`} 
+                    strokeDashoffset={-(offset / 100) * 251.2} 
+                    className="donut-segment" 
+                    strokeLinecap="round" 
+                  />
+                );
               })}
             </svg>
             <div className="absolute inset-0 flex items-center justify-center flex-col">
@@ -411,12 +613,15 @@
               <span className="text-sm font-black text-slate-800 dark:text-white">{formatMoney(total)}</span>
             </div>
           </div>
+          
           <div className="flex-1 space-y-3 w-full max-h-48 overflow-y-auto custom-scrollbar pr-2">
             {sorted.map(([cat, data], i) => (
               <div key={cat} className="flex justify-between items-center text-sm gap-3 group">
                 <div className="flex items-center gap-3 flex-1 min-w-0">
                   <span className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" style={{backgroundColor: colors[i % colors.length]}}></span>
-                  <span className="font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{cat}</span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">
+                    {cat}
+                  </span>
                 </div>
                 <div className="text-right flex-shrink-0">
                   <div className="font-bold text-slate-900 dark:text-white">{formatMoney(data.val)}</div>
@@ -431,21 +636,30 @@
 
     const EvolutionChart = memo(({ transactions, settings }) => {
       const monthlyData = {};
+      
       transactions.forEach(t => {
         let month = t.date?.slice(0, 7);
         if (!month) return;
         if (!monthlyData[month]) monthlyData[month] = { inc: 0, exp: 0 };
+        
         t.type === 'income' ? monthlyData[month].inc += t.value : monthlyData[month].exp += t.value;
       });
+      
       const sortedMonths = Object.keys(monthlyData).sort().slice(-6);
-      if(sortedMonths.length === 0) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Histórico insuficiente</div>;
+      
+      if(sortedMonths.length === 0) {
+        return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Histórico insuficiente</div>;
+      }
       
       let maxVal = 1;
       const items = sortedMonths.map(m => {
         const salaryTotal = (parseFloat(settings.salaryA || 0)) + (parseFloat(settings.salaryB || 0));
         const i = (monthlyData[m].inc || 0) + salaryTotal;
         const e = monthlyData[m].exp || 0;
-        if (i > maxVal) maxVal = i; if (e > maxVal) maxVal = e;
+        
+        if (i > maxVal) maxVal = i; 
+        if (e > maxVal) maxVal = e;
+        
         return { month: m.split('-').reverse().join('/'), inc: i, exp: e };
       });
       
@@ -454,10 +668,20 @@
           {items.map(item => (
             <div key={item.month} className="flex flex-col items-center flex-1 group cursor-pointer">
               <div className="flex items-end justify-center w-full h-44 gap-1 relative">
-                <div className="w-2/5 max-w-[24px] bg-gradient-to-t from-brand-600 to-brand-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" style={{ height: `${(item.inc / maxVal) * 100}%` }} title={`Receita: ${formatMoney(item.inc)}`}></div>
-                <div className="w-2/5 max-w-[24px] bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" style={{ height: `${(item.exp / maxVal) * 100}%` }} title={`Despesa: ${formatMoney(item.exp)}`}></div>
+                <div 
+                  className="w-2/5 max-w-[24px] bg-gradient-to-t from-brand-600 to-brand-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" 
+                  style={{ height: `${(item.inc / maxVal) * 100}%` }} 
+                  title={`Receita: ${formatMoney(item.inc)}`}
+                ></div>
+                <div 
+                  className="w-2/5 max-w-[24px] bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" 
+                  style={{ height: `${(item.exp / maxVal) * 100}%` }} 
+                  title={`Despesa: ${formatMoney(item.exp)}`}
+                ></div>
               </div>
-              <span className="text-[11px] text-slate-500 mt-3 font-bold tracking-wide group-hover:text-brand-500 transition-colors">{item.month}</span>
+              <span className="text-[11px] text-slate-500 mt-3 font-bold tracking-wide group-hover:text-brand-500 transition-colors">
+                {item.month}
+              </span>
             </div>
           ))}
         </div>
@@ -467,7 +691,7 @@
     // ==================== TELA DE AUTENTICAÇÃO ====================
     function AuthScreen() {
       const { signIn, signUp, sendPasswordReset } = useAuth();
-      const [mode, setMode] = useState('login');
+      const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'reset'
       const [form, setForm] = useState({ email: '', password: '', name: '' });
       const [error, setError] = useState('');
       const [success, setSuccess] = useState('');
@@ -475,17 +699,24 @@
       
       const handleSubmit = async (e) => {
         e.preventDefault();
-        setError(''); setSuccess(''); setLoading(true);
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
         try {
           if (mode === 'signup') {
             if (!form.name.trim()) throw new Error('Nome é obrigatório');
             if (form.password.length < 6) throw new Error('Senha deve ter no mínimo 6 caracteres');
+            
             await signUp(form.email, form.password, form.name);
             setSuccess('Conta criada! Bem-vindo ao Finanças DMX.');
+            
           } else if (mode === 'login') {
             await signIn(form.email, form.password);
+            
           } else if (mode === 'reset') {
             if (!form.email) throw new Error('Digite seu email');
+            
             await sendPasswordReset(form.email);
             setSuccess('Email de recuperação enviado! Verifique sua caixa de entrada.');
             setTimeout(() => setMode('login'), 3000);
@@ -497,19 +728,25 @@
           else if (msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password') || msg.includes('auth/invalid-credential')) msg = 'Email ou senha incorretos.';
           else if (msg.includes('auth/weak-password')) msg = 'Senha muito fraca (mínimo 6 caracteres).';
           else if (msg.includes('auth/too-many-requests')) msg = 'Muitas tentativas. Tente novamente em alguns minutos.';
+          
           setError(msg);
-        } finally { setLoading(false); }
+        } finally {
+          setLoading(false);
+        }
       };
       
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-4 relative overflow-hidden">
+          {/* Blobs de fundo */}
           <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-500/20 rounded-full blur-[120px] animate-blob"></div>
           <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-500/20 rounded-full blur-[120px] animate-blob" style={{animationDelay: '5s'}}></div>
           
           <div className="glass-card p-8 md:p-10 rounded-3xl w-full max-w-md shadow-2xl relative z-10 animate-fade-in">
             <div className="text-center mb-8">
               <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-brand-500/30">D</div>
-              <h1 className="font-extrabold text-3xl bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-partner-400 tracking-tight">Finanças DMX</h1>
+              <h1 className="font-extrabold text-3xl bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-partner-400 tracking-tight">
+                Finanças DMX
+              </h1>
               <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
                 {mode === 'login' && 'Entre para acessar suas finanças'}
                 {mode === 'signup' && 'Crie sua conta gratuita'}
@@ -517,35 +754,96 @@
               </p>
             </div>
             
-            {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 rounded-xl text-sm font-medium flex items-start gap-2"><span>⚠️</span> {error}</div>}
-            {success && <div className="mb-4 p-3 bg-emerald-100/50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm font-medium flex items-start gap-2"><span>✅</span> {success}</div>}
+            {error && (
+              <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 rounded-xl text-sm font-medium flex items-start gap-2">
+                <span>⚠️</span> {error}
+              </div>
+            )}
+            
+            {success && (
+              <div className="mb-4 p-3 bg-emerald-100/50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm font-medium flex items-start gap-2">
+                <span>✅</span> {success}
+              </div>
+            )}
             
             <form onSubmit={handleSubmit} className="space-y-4">
               {mode === 'signup' && (
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nome</label>
-                  <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 transition-all" placeholder="Seu nome" required />
+                  <input 
+                    type="text" 
+                    value={form.name} 
+                    onChange={e => setForm({...form, name: e.target.value})} 
+                    className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300" 
+                    placeholder="Seu nome" 
+                    required 
+                  />
                 </div>
               )}
+              
               <div>
                 <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email</label>
-                <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 transition-all" placeholder="seu@email.com" required />
+                <input 
+                  type="email" 
+                  value={form.email} 
+                  onChange={e => setForm({...form, email: e.target.value})} 
+                  className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300" 
+                  placeholder="seu@email.com" 
+                  required 
+                />
               </div>
+              
               {mode !== 'reset' && (
                 <div>
                   <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Senha</label>
-                  <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 transition-all" placeholder="••••••••" required minLength="6" />
+                  <input 
+                    type="password" 
+                    value={form.password} 
+                    onChange={e => setForm({...form, password: e.target.value})} 
+                    className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300" 
+                    placeholder="••••••••" 
+                    required 
+                    minLength="6" 
+                  />
                 </div>
               )}
-              <button type="submit" disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-0.5 disabled:translate-y-0">
-                {loading ? 'Processando...' : mode === 'login' ? 'Entrar' : mode === 'signup' ? 'Criar Conta Gratuita' : 'Enviar Email de Recuperação'}
+              
+              <button 
+                type="submit" 
+                disabled={loading} 
+                className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-0.5 disabled:translate-y-0"
+              >
+                {loading ? 'Processando...' : 
+                  mode === 'login' ? 'Entrar' : 
+                  mode === 'signup' ? 'Criar Conta Gratuita' : 'Enviar Email de Recuperação'}
               </button>
             </form>
             
             <div className="mt-6 space-y-2 text-center">
-              {mode === 'login' && <button onClick={() => { setMode('reset'); setError(''); setSuccess(''); }} className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors">Esqueci minha senha</button>}
-              <div><button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSuccess(''); }} className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors">{mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}</button></div>
-              {mode !== 'login' && <button onClick={() => { setMode('login'); setError(''); setSuccess(''); }} className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors block mx-auto">← Voltar ao login</button>}
+              {mode === 'login' && (
+                <button 
+                  onClick={() => { setMode('reset'); setError(''); setSuccess(''); }} 
+                  className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors"
+                >
+                  Esqueci minha senha
+                </button>
+              )}
+              <div>
+                <button 
+                  onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSuccess(''); }} 
+                  className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors"
+                >
+                  {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}
+                </button>
+              </div>
+              {mode !== 'login' && (
+                <button 
+                  onClick={() => { setMode('login'); setError(''); setSuccess(''); }} 
+                  className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors block mx-auto"
+                >
+                  ← Voltar ao login
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -557,7 +855,7 @@
       const { user, userData, refreshUserData } = useAuth();
       const [step, setStep] = useState(1);
       const [mode, setMode] = useState('solo');
-      const [coupleAction, setCoupleAction] = useState(null);
+      const [coupleAction, setCoupleAction] = useState(null); // 'create' | 'join'
       const [partnerEmail, setPartnerEmail] = useState('');
       const [inviteCode, setInviteCode] = useState('');
       const [generatedCode, setGeneratedCode] = useState('');
@@ -567,122 +865,279 @@
       
       const handleStartSolo = async () => {
         setLoading(true);
-        try { await DataService.updateUser(user.uid, { mode: 'solo' }); await refreshUserData(); } 
-        catch (err) { setError(err.message); } finally { setLoading(false); }
+        try {
+          await DataService.updateUser(user.uid, { mode: 'solo' });
+          await refreshUserData();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
       };
       
       const handleCreateCouple = async () => {
-        if (!partnerEmail) { setError('Digite o email do parceiro'); return; }
-        setError(''); setLoading(true);
+        if (!partnerEmail) {
+          setError('Digite o email do parceiro');
+          return;
+        }
+        setError('');
+        setLoading(true);
         try {
-          const result = await DataService.createCouple({ uid: user.uid, name: userData.name }, partnerEmail, nameInCouple);
-          setGeneratedCode(result.inviteCode); setStep(4); await refreshUserData();
-        } catch (err) { setError(err.message); } finally { setLoading(false); }
+          const result = await DataService.createCouple(
+            { uid: user.uid, name: userData.name }, 
+            partnerEmail, 
+            nameInCouple
+          );
+          setGeneratedCode(result.inviteCode);
+          setStep(4);
+          await refreshUserData();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
       };
       
       const handleJoinCouple = async () => {
-        if (!inviteCode || inviteCode.length !== 6) { setError('Digite o código de 6 caracteres'); return; }
-        setError(''); setLoading(true);
-        try { await DataService.acceptInviteByCode({ uid: user.uid }, inviteCode); await refreshUserData(); } 
-        catch (err) { setError(err.message); } finally { setLoading(false); }
+        if (!inviteCode || inviteCode.length !== 6) {
+          setError('Digite o código de 6 caracteres');
+          return;
+        }
+        setError('');
+        setLoading(true);
+        try {
+          await DataService.acceptInviteByCode({ uid: user.uid, email: user.email }, inviteCode);
+          await refreshUserData();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
       };
       
       return (
         <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-4 relative overflow-hidden">
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-500/20 rounded-full blur-[120px] animate-blob"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-500/20 rounded-full blur-[120px] animate-blob" style={{animationDelay: '5s'}}></div>
+          
           <div className="glass-card p-8 md:p-10 rounded-3xl w-full max-w-lg shadow-2xl relative z-10 animate-slide-up">
+            
+            {/* Passo 1: Escolher modo */}
             {step === 1 && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Olá, {userData?.name}! 👋</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-8">Como gostaria de usar o Finanças DMX?</p>
+                
                 <div className="space-y-3 mb-6">
-                  <button onClick={() => { setMode('solo'); setStep(2); }} className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-brand-500 text-left transition-all">
-                    <div className="flex items-center gap-3"><span className="text-3xl">🧍</span><div><div className="font-bold text-lg">Modo Solo</div><div className="text-sm text-slate-500">Controle privado das suas finanças.</div></div></div>
+                  <button 
+                    onClick={() => { setMode('solo'); setStep(2); }} 
+                    className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-brand-500 text-left transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl group-hover:scale-110 transition-transform">🧍</span>
+                      <div>
+                        <div className="font-bold text-lg">Modo Solo</div>
+                        <div className="text-sm text-slate-500">Controle privado das suas finanças.</div>
+                      </div>
+                    </div>
                   </button>
-                  <button onClick={() => { setMode('couple'); setStep(2); }} className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all">
-                    <div className="flex items-center gap-3"><span className="text-3xl">👫</span><div><div className="font-bold text-lg">Modo Casal</div><div className="text-sm text-slate-500">Gerencie com alguém especial.</div></div></div>
+                  
+                  <button 
+                    onClick={() => { setMode('couple'); setStep(2); }} 
+                    className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all group"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl group-hover:scale-110 transition-transform">👫</span>
+                      <div>
+                        <div className="font-bold text-lg">Modo Casal</div>
+                        <div className="text-sm text-slate-500">Gerencie com alguém especial.</div>
+                      </div>
+                    </div>
                   </button>
                 </div>
               </>
             )}
+            
+            {/* Passo 2A: Solo */}
             {step === 2 && mode === 'solo' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Modo Solo 🧍</h2>
-                <p className="text-slate-500 dark:text-slate-400 mb-8">Você pode mudar para o modo casal quando quiser nas <strong>Configurações</strong>.</p>
-                <button onClick={handleStartSolo} disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all">{loading ? 'Ativando...' : 'Começar no Modo Solo'}</button>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">
+                  Você pode mudar para o modo casal quando quiser nas <strong>Configurações</strong>.
+                </p>
+                <button 
+                  onClick={handleStartSolo} 
+                  disabled={loading} 
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all"
+                >
+                  {loading ? 'Ativando...' : 'Começar no Modo Solo'}
+                </button>
                 <button onClick={() => setStep(1)} className="w-full mt-3 text-slate-500 hover:text-brand-500 font-medium py-2">← Voltar</button>
               </>
             )}
+            
+            {/* Passo 2B: Casal - escolher criar ou entrar */}
             {step === 2 && mode === 'couple' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Modo Casal 👫</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Você vai <strong>convidar</strong> alguém ou <strong>aceitar um convite</strong>?</p>
+                
                 <div className="space-y-3 mb-6">
-                  <button onClick={() => { setCoupleAction('create'); setStep(3); }} className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all">
-                    <div className="flex items-center gap-3"><span className="text-3xl">✉️</span><div><div className="font-bold text-lg">Quero convidar meu parceiro(a)</div><div className="text-sm text-slate-500">Vou gerar um código e enviar para ele(a)</div></div></div>
+                  <button 
+                    onClick={() => { setCoupleAction('create'); setStep(3); }} 
+                    className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">✉️</span>
+                      <div>
+                        <div className="font-bold text-lg">Quero convidar meu parceiro(a)</div>
+                        <div className="text-sm text-slate-500">Vou gerar um código e enviar para ele(a)</div>
+                      </div>
+                    </div>
                   </button>
-                  <button onClick={() => { setCoupleAction('join'); setStep(3); }} className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all">
-                    <div className="flex items-center gap-3"><span className="text-3xl">🔑</span><div><div className="font-bold text-lg">Recebi um código de convite</div><div className="text-sm text-slate-500">Vou digitar o código que meu parceiro(a) me enviou</div></div></div>
+                  
+                  <button 
+                    onClick={() => { setCoupleAction('join'); setStep(3); }} 
+                    className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">🔑</span>
+                      <div>
+                        <div className="font-bold text-lg">Recebi um código de convite</div>
+                        <div className="text-sm text-slate-500">Vou digitar o código que recebi</div>
+                      </div>
+                    </div>
                   </button>
                 </div>
+                
                 <button onClick={() => setStep(1)} className="w-full text-slate-500 hover:text-brand-500 font-medium py-2">← Voltar</button>
               </>
             )}
+            
+            {/* Passo 3A: Criar casal (convidar) */}
             {step === 3 && coupleAction === 'create' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Convidar Parceiro(a) ✉️</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Digite o email de quem você quer convidar.</p>
-                {error && <div className="mb-4 p-3 bg-rose-100/50 text-rose-700 rounded-xl text-sm font-medium">⚠️ {error}</div>}
+                
+                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm font-medium">⚠️ {error}</div>}
+                
                 <div className="space-y-4 mb-6">
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email do parceiro(a)</label>
-                    <input type="email" value={partnerEmail} onChange={e => setPartnerEmail(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2" placeholder="parceiro@email.com" />
+                    <input 
+                      type="email" 
+                      value={partnerEmail} 
+                      onChange={e => setPartnerEmail(e.target.value)} 
+                      className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-partner-500/30" 
+                      placeholder="parceiro@email.com" 
+                    />
+                    <p className="text-xs text-slate-500 mt-1.5">⚠️ Seu parceiro deve criar uma conta primeiro.</p>
                   </div>
+                  
                   <div>
                     <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Como quer ser chamado?</label>
-                    <select value={nameInCouple} onChange={e => setNameInCouple(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none">
-                      <option value="Pessoa A">Pessoa A</option><option value="Pessoa B">Pessoa B</option>
+                    <select 
+                      value={nameInCouple} 
+                      onChange={e => setNameInCouple(e.target.value)} 
+                      className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-partner-500/30"
+                    >
+                      <option value="Pessoa A">Pessoa A</option>
+                      <option value="Pessoa B">Pessoa B</option>
                     </select>
                   </div>
                 </div>
+                
                 <div className="flex gap-3">
                   <button onClick={() => setStep(2)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-4 rounded-xl">Voltar</button>
-                  <button onClick={handleCreateCouple} disabled={loading || !partnerEmail} className="flex-1 bg-partner-500 text-white font-bold py-4 rounded-xl">{loading ? 'Gerando...' : 'Gerar Código'}</button>
+                  <button 
+                    onClick={handleCreateCouple} 
+                    disabled={loading || !partnerEmail} 
+                    className="flex-1 bg-partner-500 hover:bg-partner-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg transition-all"
+                  >
+                    {loading ? 'Gerando...' : 'Gerar Código'}
+                  </button>
                 </div>
               </>
             )}
+            
+            {/* Passo 3B: Entrar em casal (digitar código) */}
             {step === 3 && coupleAction === 'join' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Aceitar Convite 🔑</h2>
                 <p className="text-slate-500 dark:text-slate-400 mb-6">Digite o código de 6 caracteres que seu parceiro(a) te enviou.</p>
-                {error && <div className="mb-4 p-3 bg-rose-100/50 text-rose-700 rounded-xl text-sm font-medium">⚠️ {error}</div>}
+                
+                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm font-medium">⚠️ {error}</div>}
+                
                 <div className="mb-6">
-                  <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} maxLength="6" className="w-full px-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none text-center font-mono font-black text-2xl tracking-[0.5em]" placeholder="XXXXXX" />
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Código de Convite</label>
+                  <input 
+                    type="text" 
+                    value={inviteCode} 
+                    onChange={e => setInviteCode(e.target.value.toUpperCase())} 
+                    maxLength="6" 
+                    className="w-full px-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-partner-500/30 text-center font-mono font-black text-2xl tracking-[0.5em]" 
+                    placeholder="XXXXXX" 
+                  />
                 </div>
+                
                 <div className="flex gap-3">
                   <button onClick={() => setStep(2)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-4 rounded-xl">Voltar</button>
-                  <button onClick={handleJoinCouple} disabled={loading || inviteCode.length !== 6} className="flex-1 bg-partner-500 text-white font-bold py-4 rounded-xl">{loading ? 'Entrando...' : 'Entrar no Casal'}</button>
+                  <button 
+                    onClick={handleJoinCouple} 
+                    disabled={loading || inviteCode.length !== 6} 
+                    className="flex-1 bg-partner-500 hover:bg-partner-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg transition-all"
+                  >
+                    {loading ? 'Entrando...' : 'Entrar no Casal'}
+                  </button>
                 </div>
               </>
             )}
+            
+            {/* Passo 4: Código gerado com sucesso */}
             {step === 4 && (
               <>
                 <div className="text-center mb-8">
-                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 flex items-center justify-center text-5xl">🎉</div>
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-5xl">🎉</div>
                   <h2 className="font-extrabold text-2xl mb-2 tracking-tight">Casal criado!</h2>
+                  <p className="text-slate-500 dark:text-slate-400">Envie este código ao seu parceiro(a):</p>
                 </div>
-                <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 p-6 rounded-2xl border mb-6 text-center">
+                
+                <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 p-6 rounded-2xl border border-partner-200 dark:border-partner-800/50 mb-6 text-center">
                   <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Código de Convite</p>
                   <div className="font-mono font-black text-4xl tracking-[0.3em] text-partner-600 dark:text-partner-400 mb-4">{generatedCode}</div>
-                  <button onClick={() => navigator.clipboard?.writeText(generatedCode)} className="text-sm bg-white dark:bg-slate-800 font-bold py-2 px-6 rounded-xl shadow-md">📋 Copiar</button>
+                  <button 
+                    onClick={() => { navigator.clipboard?.writeText(generatedCode); }} 
+                    className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold py-2 px-6 rounded-xl shadow-md transition-all"
+                  >
+                    📋 Copiar
+                  </button>
                 </div>
-                <button onClick={async () => await refreshUserData()} className="w-full bg-brand-500 text-white font-bold py-4 rounded-xl shadow-lg">Continuar para o Dashboard</button>
+                
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800/50 p-4 rounded-xl mb-6">
+                  <p className="text-sm text-blue-800 dark:text-blue-300">
+                    <strong>Próximos passos:</strong><br/>
+                    1. Seu parceiro deve criar uma conta<br/>
+                    2. Vai em Configurações<br/>
+                    3. Clica em "Ativar Modo Casal"<br/>
+                    4. Clica em "Recebi um código"<br/>
+                    5. Digita este código acima
+                  </p>
+                </div>
+                
+                <button 
+                  onClick={async () => await refreshUserData()} 
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all"
+                >
+                  Continuar para o Dashboard
+                </button>
               </>
             )}
+            
           </div>
         </div>
       );
     }
-
     // ==================== MODAL MIGRAÇÃO PARA CASAL ====================
     function MigrateModal({ onClose, onSuccess }) {
       const { user, userData } = useAuth();
@@ -696,70 +1151,167 @@
       const [loading, setLoading] = useState(false);
       
       const handleCreate = async () => {
-        if (!partnerEmail) return setError('Digite o email');
-        setError(''); setLoading(true);
+        if (!partnerEmail) {
+          setError('Digite o email');
+          return;
+        }
+        setError('');
+        setLoading(true);
         try {
-          const result = await DataService.createCouple({ uid: user.uid, name: userData.name }, partnerEmail, nameInCouple);
-          setGeneratedCode(result.inviteCode); setStep(3);
-        } catch (err) { setError(err.message); } finally { setLoading(false); }
+          const result = await DataService.createCouple(
+            { uid: user.uid, name: userData.name }, 
+            partnerEmail, 
+            nameInCouple
+          );
+          setGeneratedCode(result.inviteCode);
+          setStep(3);
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
       };
+      
       const handleJoin = async () => {
-        if (inviteCode.length !== 6) return setError('Código deve ter 6 caracteres');
-        setError(''); setLoading(true);
+        if (inviteCode.length !== 6) {
+          setError('Código deve ter 6 caracteres');
+          return;
+        }
+        setError('');
+        setLoading(true);
         try {
-          await DataService.acceptInviteByCode({ uid: user.uid }, inviteCode); await onSuccess(); onClose();
-        } catch (err) { setError(err.message); } finally { setLoading(false); }
+          await DataService.acceptInviteByCode({ uid: user.uid, email: user.email }, inviteCode);
+          await onSuccess();
+          onClose();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
       };
       
       return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="glass-card p-8 rounded-3xl w-full max-w-lg shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
             {step === 1 && (
               <>
                 <h2 className="font-extrabold text-2xl mb-6">Migrar para Modo Casal 👫</h2>
                 <div className="space-y-3 mb-6">
-                  <button onClick={() => { setAction('create'); setStep(2); }} className="w-full p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left"><div className="font-bold">✉️ Convidar parceiro(a)</div></button>
-                  <button onClick={() => { setAction('join'); setStep(2); }} className="w-full p-4 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left"><div className="font-bold">🔑 Recebi um código</div></button>
+                  <button 
+                    onClick={() => { setAction('create'); setStep(2); }} 
+                    className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all"
+                  >
+                    <div className="font-bold text-lg">✉️ Convidar parceiro(a)</div>
+                    <div className="text-sm text-slate-500 mt-1">Gero um código para enviar</div>
+                  </button>
+                  <button 
+                    onClick={() => { setAction('join'); setStep(2); }} 
+                    className="w-full p-5 rounded-2xl border-2 border-slate-200 dark:border-slate-700 hover:border-partner-500 text-left transition-all"
+                  >
+                    <div className="font-bold text-lg">🔑 Recebi um código</div>
+                    <div className="text-sm text-slate-500 mt-1">Vou digitar o código recebido</div>
+                  </button>
                 </div>
                 <button onClick={onClose} className="w-full text-slate-500 hover:text-brand-500 font-medium py-2">Cancelar</button>
               </>
             )}
+            
             {step === 2 && action === 'create' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-6">Convidar Parceiro(a)</h2>
-                {error && <div className="mb-4 p-3 bg-rose-100/50 text-rose-700 rounded-xl text-sm">⚠️ {error}</div>}
+                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm">⚠️ {error}</div>}
+                
                 <div className="space-y-4 mb-6">
-                  <input type="email" value={partnerEmail} onChange={e => setPartnerEmail(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none" placeholder="parceiro@email.com" />
-                  <select value={nameInCouple} onChange={e => setNameInCouple(e.target.value)} className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none">
-                    <option value="Pessoa A">Pessoa A</option><option value="Pessoa B">Pessoa B</option>
-                  </select>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Email do parceiro(a)</label>
+                    <input 
+                      type="email" 
+                      value={partnerEmail} 
+                      onChange={e => setPartnerEmail(e.target.value)} 
+                      className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-partner-500/30" 
+                      placeholder="parceiro@email.com" 
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Seu nome no casal</label>
+                    <select 
+                      value={nameInCouple} 
+                      onChange={e => setNameInCouple(e.target.value)} 
+                      className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none focus:ring-2 focus:ring-partner-500/30"
+                    >
+                      <option value="Pessoa A">Pessoa A</option>
+                      <option value="Pessoa B">Pessoa B</option>
+                    </select>
+                  </div>
                 </div>
+                
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-3 rounded-xl">Voltar</button>
-                  <button onClick={handleCreate} disabled={loading} className="flex-1 bg-partner-500 text-white font-bold py-3 rounded-xl">{loading ? 'Gerando...' : 'Gerar'}</button>
+                  <button 
+                    onClick={handleCreate} 
+                    disabled={loading || !partnerEmail} 
+                    className="flex-1 bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg transition-all"
+                  >
+                    {loading ? 'Gerando...' : 'Gerar Convite'}
+                  </button>
                 </div>
               </>
             )}
+            
             {step === 2 && action === 'join' && (
               <>
                 <h2 className="font-extrabold text-2xl mb-6">Aceitar Convite</h2>
-                {error && <div className="mb-4 p-3 bg-rose-100/50 text-rose-700 rounded-xl text-sm">⚠️ {error}</div>}
-                <div className="mb-6"><input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} maxLength="6" className="w-full px-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none text-center font-mono font-black text-2xl" placeholder="XXXXXX" /></div>
+                {error && <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300 rounded-xl text-sm">⚠️ {error}</div>}
+                
+                <div className="mb-6">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">Código de 6 caracteres</label>
+                  <input 
+                    type="text" 
+                    value={inviteCode} 
+                    onChange={e => setInviteCode(e.target.value.toUpperCase())} 
+                    maxLength="6" 
+                    className="w-full px-4 py-4 bg-slate-100/50 dark:bg-slate-800/50 rounded-xl outline-none text-center font-mono font-black text-2xl tracking-[0.5em] focus:ring-2 focus:ring-partner-500/30" 
+                    placeholder="XXXXXX" 
+                  />
+                </div>
+                
                 <div className="flex gap-3">
                   <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-3 rounded-xl">Voltar</button>
-                  <button onClick={handleJoin} disabled={loading} className="flex-1 bg-partner-500 text-white font-bold py-3 rounded-xl">{loading ? 'Entrando...' : 'Entrar'}</button>
+                  <button 
+                    onClick={handleJoin} 
+                    disabled={loading || inviteCode.length !== 6} 
+                    className="flex-1 bg-partner-500 hover:bg-partner-600 text-white font-bold py-3 rounded-xl shadow-lg transition-all"
+                  >
+                    {loading ? 'Entrando...' : 'Entrar no Casal'}
+                  </button>
                 </div>
               </>
             )}
+            
             {step === 3 && (
               <>
-                <div className="text-center mb-8"><h2 className="font-extrabold text-2xl mb-2">Casal criado!</h2><p className="text-slate-500">Envie o código:</p></div>
-                <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 p-6 rounded-2xl border mb-6 text-center">
-                  <div className="font-mono font-black text-4xl text-partner-600 dark:text-partner-400 mb-4">{generatedCode}</div>
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-5xl">🎉</div>
+                  <h2 className="font-extrabold text-2xl mb-2">Casal criado!</h2>
+                  <p className="text-slate-500 dark:text-slate-400">Envie este código ao seu parceiro(a):</p>
                 </div>
-                <button onClick={() => { onClose(); onSuccess(); }} className="w-full bg-brand-500 text-white font-bold py-3 rounded-xl">Concluir</button>
+                
+                <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 p-6 rounded-2xl border border-partner-200 dark:border-partner-800/50 mb-6 text-center">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">Código de Convite</p>
+                  <div className="font-mono font-black text-4xl tracking-[0.3em] text-partner-600 dark:text-partner-400 mb-4">{generatedCode}</div>
+                  <button onClick={() => navigator.clipboard?.writeText(generatedCode)} className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 font-bold py-2 px-6 rounded-xl shadow-md transition-all">📋 Copiar</button>
+                </div>
+                
+                <button 
+                  onClick={() => { onClose(); onSuccess(); }} 
+                  className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg transition-all"
+                >
+                  Concluir
+                </button>
               </>
             )}
+            
           </div>
         </div>
       );
@@ -777,26 +1329,51 @@
       const [saving, setSaving] = useState(false);
       
       const loadContributions = async () => {
-        setLoading(true); setContributions(await DataService.getContributions(goal.id)); setLoading(false);
+        setLoading(true); 
+        const list = await DataService.getContributions(goal.id);
+        setContributions(list); 
+        setLoading(false);
       };
-      useEffect(() => { loadContributions(); }, [goal.id]);
+      
+      useEffect(() => { 
+        loadContributions(); 
+      }, [goal.id]);
       
       const handleAdd = async (e) => {
-        e.preventDefault(); const amount = parseFloat(newAmount); if (isNaN(amount) || amount <= 0) return;
+        e.preventDefault(); 
+        const amount = parseFloat(newAmount); 
+        if (isNaN(amount) || amount <= 0) return;
+        
         setSaving(true);
         try {
-          await DataService.addContribution(goal.id, { amount, date: newDate, note: newNote || null, ownerId: user.uid, userName: user.displayName || user.email });
-          await loadContributions(); if (onContributionsChange) onContributionsChange();
-          setNewAmount(''); setNewNote(''); setShowAdd(false);
-        } catch (e) { console.error(e); } finally { setSaving(false); }
+          await DataService.addContribution(goal.id, { 
+            amount, 
+            date: newDate, 
+            note: newNote || null, 
+            ownerId: user.uid, 
+            userName: user.displayName || user.email 
+          });
+          await loadContributions(); 
+          if (onContributionsChange) onContributionsChange();
+          setNewAmount(''); 
+          setNewNote(''); 
+          setShowAdd(false);
+        } catch (e) { 
+          console.error(e); 
+        } finally { 
+          setSaving(false); 
+        }
       };
       
       const handleDelete = async (id) => {
         if (!window.confirm('Remover este aporte? O valor será descontado da meta.')) return;
         try {
-          await DataService.deleteContribution(goal.id, id); await loadContributions();
+          await DataService.deleteContribution(goal.id, id); 
+          await loadContributions();
           if (onContributionsChange) onContributionsChange();
-        } catch (e) { console.error(e); }
+        } catch (e) { 
+          console.error(e); 
+        }
       };
       
       const total = contributions.reduce((sum, c) => sum + c.amount, 0);
@@ -805,42 +1382,95 @@
       return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
           <div className="glass-card p-6 md:p-8 rounded-3xl w-full max-w-2xl shadow-2xl animate-slide-up max-h-[90vh] overflow-y-auto custom-scrollbar">
+            
             <div className="flex justify-between items-start mb-6">
-              <div><h2 className="font-extrabold text-2xl mb-1">🎯 {goal.name}</h2></div>
-              <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl">✕</button>
+              <div>
+                <h2 className="font-extrabold text-2xl mb-1">🎯 {goal.name}</h2>
+                <p className="text-sm text-slate-500">Histórico completo de aportes</p>
+              </div>
+              <button onClick={onClose} className="p-2 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl transition-colors">✕</button>
             </div>
+            
             <div className="grid grid-cols-3 gap-3 mb-6">
-              <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800/50"><p className="text-[10px] uppercase font-bold text-brand-600 mb-1">Acumulado</p><p className="font-black text-xl text-brand-700">{formatMoney(total)}</p></div>
-              <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700"><p className="text-[10px] uppercase font-bold text-slate-600 mb-1">Meta</p><p className="font-black text-xl">{formatMoney(goal.target)}</p></div>
-              <div className="p-4 rounded-2xl bg-partner-50 dark:bg-partner-900/20 border border-partner-200 dark:border-partner-800/50"><p className="text-[10px] uppercase font-bold text-partner-600 mb-1">Progresso</p><p className="font-black text-xl text-partner-700">{pct.toFixed(1)}%</p></div>
+              <div className="p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800/50">
+                <p className="text-[10px] uppercase font-bold text-brand-600 dark:text-brand-400 mb-1">Acumulado</p>
+                <p className="font-black text-xl text-brand-700 dark:text-brand-300">{formatMoney(total)}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700">
+                <p className="text-[10px] uppercase font-bold text-slate-600 dark:text-slate-400 mb-1">Meta</p>
+                <p className="font-black text-xl text-slate-800 dark:text-white">{formatMoney(goal.target)}</p>
+              </div>
+              <div className="p-4 rounded-2xl bg-partner-50 dark:bg-partner-900/20 border border-partner-200 dark:border-partner-800/50">
+                <p className="text-[10px] uppercase font-bold text-partner-600 dark:text-partner-400 mb-1">Progresso</p>
+                <p className="font-black text-xl text-partner-700 dark:text-partner-300">{pct.toFixed(1)}%</p>
+              </div>
             </div>
-            <div className="mb-6"><div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden"><div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000" style={{width: `${pct}%`}}></div></div></div>
+            
+            <div className="mb-6">
+              <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
+                <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000 rounded-full" style={{width: `${pct}%`}}></div>
+              </div>
+            </div>
+            
             {!showAdd ? (
-              <button onClick={() => setShowAdd(true)} className="w-full mb-6 py-3 bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold rounded-xl shadow-lg">+ Adicionar Aporte</button>
+              <button 
+                onClick={() => setShowAdd(true)} 
+                className="w-full mb-6 py-3 bg-gradient-to-r from-brand-500 to-brand-600 text-white font-bold rounded-xl shadow-lg hover:-translate-y-0.5 transition-all"
+              >
+                + Adicionar Aporte
+              </button>
             ) : (
-              <form onSubmit={handleAdd} className="mb-6 p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border">
+              <form onSubmit={handleAdd} className="mb-6 p-4 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-200 dark:border-brand-800/50">
+                <h3 className="font-bold mb-3 text-slate-800 dark:text-white">Novo Aporte</h3>
                 <div className="grid grid-cols-2 gap-3 mb-3">
-                  <input type="number" step="0.01" value={newAmount} onChange={e => setNewAmount(e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 rounded-lg" placeholder="Valor" required autoFocus />
-                  <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 rounded-lg" required />
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-500">Valor (R$)</label>
+                    <input type="number" step="0.01" value={newAmount} onChange={e => setNewAmount(e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-brand-500" placeholder="500,00" required autoFocus />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-500">Data</label>
+                    <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-brand-500" required />
+                  </div>
                 </div>
-                <input type="text" value={newNote} onChange={e => setNewNote(e.target.value)} className="w-full px-3 py-2 mb-3 bg-white dark:bg-slate-900 rounded-lg" placeholder="Nota (opcional)" />
+                <div className="mb-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider mb-1 text-slate-500">Nota (opcional)</label>
+                  <input type="text" value={newNote} onChange={e => setNewNote(e.target.value)} className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg outline-none focus:border-brand-500" placeholder="Ex: Rendimento, economia do mês..." />
+                </div>
                 <div className="flex gap-2">
-                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-2 rounded-lg">Cancelar</button>
-                  <button type="submit" disabled={saving} className="flex-1 bg-brand-500 text-white font-bold py-2 rounded-lg">{saving ? '...' : 'Confirmar'}</button>
+                  <button type="button" onClick={() => setShowAdd(false)} className="flex-1 bg-slate-200 dark:bg-slate-700 font-bold py-2 rounded-lg transition-colors">Cancelar</button>
+                  <button type="submit" disabled={saving} className="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-2 rounded-lg transition-all shadow-md">{saving ? 'Processando...' : 'Confirmar Aporte'}</button>
                 </div>
               </form>
             )}
-            <div className="space-y-3">
-              {contributions.map((c, idx) => (
-                <div key={c.id} className={`relative pl-8 ${idx !== 0 ? 'border-l-2 border-slate-200 dark:border-slate-700 ml-3' : ''}`}>
-                  <div className={`absolute left-0 top-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-brand-500 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>{idx === 0 ? '★' : idx + 1}</div>
-                  <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex justify-between">
-                    <div><p className="font-black text-xl text-brand-600 dark:text-brand-400">+{formatMoney(c.amount)}</p><p className="text-xs text-slate-500">{new Date(c.date).toLocaleDateString('pt-BR')}</p></div>
-                    <button onClick={() => handleDelete(c.id)} className="p-2 text-slate-400 hover:text-rose-500">🗑️</button>
+            
+            <h3 className="font-bold mb-3 text-slate-700 dark:text-slate-300">Histórico</h3>
+            
+            {loading ? (
+              <p className="text-center text-slate-500 py-6">Carregando...</p>
+            ) : contributions.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <div className="text-4xl mb-2">💰</div>
+                <p>Nenhum aporte registrado.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {contributions.map((c, idx) => (
+                  <div key={c.id} className={`relative pl-8 ${idx !== contributions.length - 1 ? 'border-l-2 border-slate-200 dark:border-slate-700 ml-3 pb-4' : 'ml-3'}`}>
+                    <div className={`absolute left-[-13px] top-2 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${idx === 0 ? 'bg-brand-500 text-white shadow-md' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300'}`}>
+                      {idx === 0 ? '★' : contributions.length - idx}
+                    </div>
+                    <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 flex justify-between items-start hover:shadow-md transition-all group">
+                      <div>
+                        <p className="font-black text-xl text-brand-600 dark:text-brand-400">+{formatMoney(c.amount)}</p>
+                        <p className="text-xs text-slate-500 font-medium">{new Date(c.date).toLocaleDateString('pt-BR', {day: '2-digit', month: 'short', year: 'numeric'})}</p>
+                        {c.note && <p className="text-sm text-slate-600 dark:text-slate-400 italic mt-2">"{c.note}"</p>}
+                      </div>
+                      <button onClick={() => handleDelete(c.id)} className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-lg transition-colors opacity-0 group-hover:opacity-100">🗑️</button>
+                    </div>
                   </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       );
@@ -866,15 +1496,23 @@
               { facingMode: "environment" }, // Abre a câmera traseira nativa
               { fps: 15, qrbox: qrboxFunction },
               (decodedText) => {
-                html5QrCode.stop().then(() => { onScanSuccess(decodedText); }).catch(console.error);
+                html5QrCode.stop().then(() => { 
+                  onScanSuccess(decodedText); 
+                }).catch(console.error);
               },
-              (errorMessage) => { /* Ignora frames vazios */ }
+              (errorMessage) => { 
+                // Ignora frames vazios silenciosamente
+              }
             );
             
-            // Ajusta o vídeo para preencher o contêiner perfeitamente sem distorção
+            // Ajuste do vídeo para preencher o contêiner perfeitamente sem distorção (CSS trick vital)
             setTimeout(() => {
               const video = document.querySelector("#qr-reader video");
-              if (video) { video.style.objectFit = "cover"; video.style.width = "100%"; video.style.height = "100%"; }
+              if (video) { 
+                video.style.objectFit = "cover"; 
+                video.style.width = "100%"; 
+                video.style.height = "100%"; 
+              }
             }, 500);
           } catch (err) {
             setErrorMsg("Não foi possível acessar a câmera traseira. Verifique as permissões de vídeo do seu navegador para este site.");
@@ -884,18 +1522,27 @@
 
         startScanner();
 
-        return () => { if (html5QrCode.isScanning) { html5QrCode.stop().catch(console.error); } };
+        // Cleanup ao fechar modal
+        return () => { 
+          if (html5QrCode.isScanning) { 
+            html5QrCode.stop().catch(console.error); 
+          } 
+        };
       }, [onScanSuccess]);
 
       return (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/95 backdrop-blur-md p-4 animate-fade-in">
           <div className="bg-slate-900 p-6 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up border border-slate-700 flex flex-col">
+            
             <div className="text-center mb-6">
               <h3 className="font-extrabold text-xl text-white mb-2">📸 Escanear Código</h3>
               <p className="text-xs text-slate-400 font-medium">Posicione o PIX ou NFC-e no quadrado central</p>
             </div>
+            
             {errorMsg ? (
-              <div className="p-4 bg-rose-900/30 border border-rose-800 text-rose-400 rounded-xl text-center text-sm font-bold mb-6">⚠️ {errorMsg}</div>
+              <div className="p-4 bg-rose-900/30 border border-rose-800 text-rose-400 rounded-xl text-center text-sm font-bold mb-6">
+                ⚠️ {errorMsg}
+              </div>
             ) : (
               <div className="relative w-full aspect-square rounded-3xl overflow-hidden mb-8 bg-black shadow-[0_0_40px_rgba(20,184,166,0.15)] border-2 border-brand-500/50">
                 <div id="qr-reader" className="w-full h-full"></div>
@@ -904,15 +1551,18 @@
                 </div>
               </div>
             )}
-            <button onClick={onCancel} className="w-full py-4 mt-auto bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs">
+            
+            <button 
+              onClick={onCancel} 
+              className="w-full py-4 mt-auto bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs"
+            >
               Cancelar e Voltar
             </button>
           </div>
         </div>
       );
     };
-
-    // ==================== DASHBOARD APP ====================
+    // ==================== DASHBOARD APP (CORAÇÃO DO SISTEMA) ====================
     function DashboardApp() {
       const { user, userData, coupleData, signOut, refreshUserData } = useAuth();
       const [activeTab, setActiveTab] = useState('dashboard');
@@ -925,6 +1575,7 @@
       const [showAI, setShowAI] = useState(false);
       const [isScanning, setIsScanning] = useState(false);
 
+      // Função acionada ao ler QR Code com sucesso
       const handleScanSuccess = useCallback((decodedText) => {
         setIsScanning(false);
         try {
@@ -932,7 +1583,7 @@
           let desc = "Nova Despesa";
           let category = "Outros";
 
-          // 1. TENTAR LER PADRÃO PIX (Contas de água, luz, transferências)
+          // TENTAR LER PADRÃO PIX
           if (decodedText.startsWith('000201') || decodedText.includes('br.gov.bcb.pix')) {
             desc = "Pagamento de Conta (PIX)";
             category = "Habitação";
@@ -941,7 +1592,7 @@
               value = String(parseFloat(pixMatch[1]));
             }
           } 
-          // 2. TENTAR LER PADRÃO NFC-e (Supermercados, Farmácias)
+          // TENTAR LER PADRÃO NFC-e (Supermercado)
           else if (decodedText.includes('|') || decodedText.includes('sefaz')) {
             desc = "Compras (NFC-e)";
             category = "Casa/Mercado";
@@ -956,6 +1607,7 @@
           }
 
           setTxForm(prev => ({ ...prev, desc, value, category, type: 'expense' }));
+          
           if (value) {
             showToast("QR Code processado com sucesso!", false, `Valor extraído: R$ ${value}`);
           } else {
@@ -971,19 +1623,21 @@
       const [budgets, setBudgets] = useState({});
       const [subscriptions, setSubscriptions] = useState([]);
       const [installments, setInstallments] = useState([]);
-      const [contributionsMap, setContributionsMap] = useState({});
+      const [contributionsMap, setContributionsMap] = useState({}); // goalId -> total
       const [partnerData, setPartnerData] = useState(null);
       const [loadingData, setLoadingData] = useState(true);
       
-      const [txForm, setTxForm] = useState({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user?.uid });
+      // ESTADOS DOS FORMULÁRIOS COM AS NOVAS REGRAS (splitRule e interval)
+      const [txForm, setTxForm] = useState({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', splitRule: 'proportional', paidBy: user?.uid });
       const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '' });
       const [budgetForm, setBudgetForm] = useState({ category: 'Alimentação', limit: '' });
-      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, scope: 'private' });
-      const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas', scope: 'private' });
+      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, interval: 1, scope: 'private', splitRule: 'proportional' });
+      const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, interval: 1, category: 'Dívidas', scope: 'private', splitRule: 'proportional' });
       const [formErrors, setFormErrors] = useState({ tx: {}, goal: {}, budget: {}, sub: {}, inst: {} });
       
       const [settings, setSettings] = useState({ 
-        salaryA: 0, salaryB: 0, 
+        salaryA: 0, 
+        salaryB: 0, 
         nameA: userData?.settings?.nameInCouple || 'Pessoa A', 
         nameB: 'Pessoa B',
       });
@@ -1015,11 +1669,13 @@
         setContributionsMap(map);
       };
       
+      // Carregamento inicial de dados
       useEffect(() => {
         const loadData = async () => {
           setLoadingData(true);
           try {
             const ownerId = isCouple && userData.coupleId ? userData.coupleId : user.uid;
+            
             const [txs, gls, subs, insts, bdg] = await Promise.all([
               DataService.getAllTransactions(user.uid, userData?.coupleId),
               DataService.getCollection('goals', user.uid, userData?.coupleId),
@@ -1027,23 +1683,47 @@
               DataService.getCollection('installments', user.uid, userData?.coupleId),
               DataService.getBudgets(ownerId)
             ]);
-            setTransactions(txs); setGoals(gls); setSubscriptions(subs); setInstallments(insts); setBudgets(bdg);
-            if (isCouple && userData?.partnerId) setPartnerData(await DataService.getUserData(userData.partnerId));
-            if (isCouple && coupleData?.settings) setSettings({ salaryA: coupleData.settings.salaryA || 0, salaryB: coupleData.settings.salaryB || 0, nameA: coupleData.settings.nameA || 'Pessoa A', nameB: coupleData.settings.nameB || 'Pessoa B' });
+            
+            setTransactions(txs); 
+            setGoals(gls); 
+            setSubscriptions(subs); 
+            setInstallments(insts); 
+            setBudgets(bdg);
+            
+            if (isCouple && userData?.partnerId) {
+              setPartnerData(await DataService.getUserData(userData.partnerId));
+            }
+            
+            if (isCouple && coupleData?.settings) {
+              setSettings({ 
+                salaryA: coupleData.settings.salaryA || 0, 
+                salaryB: coupleData.settings.salaryB || 0, 
+                nameA: coupleData.settings.nameA || 'Pessoa A', 
+                nameB: coupleData.settings.nameB || 'Pessoa B' 
+              });
+            }
+            
             await loadAllContributions(gls);
           } catch (err) { 
-            console.error(err); showToast('Erro ao carregar dados', true, err.message); 
+            console.error(err); 
+            showToast('Erro ao carregar dados', true, err.message); 
+          } finally { 
+            setLoadingData(false); 
           }
-          finally { setLoadingData(false); }
         };
+        
         if (user && userData?.mode) loadData();
       }, [user, userData, coupleData, isCouple, showToast]);
       
+      // Processamento de dados via useMemo (Performance)
       const filteredTransactions = useMemo(() => transactions.filter(t => t.date?.startsWith(monthFilter)), [transactions, monthFilter]);
       
       const totals = useMemo(() => {
         let inc = 0, exp = 0;
-        filteredTransactions.forEach(t => { if (t.type === 'income') inc += t.value; else exp += t.value; });
+        filteredTransactions.forEach(t => { 
+          if (t.type === 'income') inc += t.value; 
+          else exp += t.value; 
+        });
         const s = (parseFloat(settings.salaryA) || 0) + (parseFloat(settings.salaryB) || 0);
         return { inc: inc + s, exp, balance: (inc + s) - exp };
       }, [filteredTransactions, settings]);
@@ -1053,7 +1733,8 @@
         filteredTransactions.forEach(t => { 
           if (t.type === 'expense') { 
             if (!e[t.category]) e[t.category] = { val: 0, count: 0 }; 
-            e[t.category].val += t.value; e[t.category].count += 1; 
+            e[t.category].val += t.value; 
+            e[t.category].count += 1; 
           } 
         });
         return e;
@@ -1071,162 +1752,506 @@
         };
       }, [subscriptions, user.uid]);
       
+      // O NOVO CÉREBRO DE RATEIO (Lida com Proporcional, 50/50 e assumir dívidas)
       const splitLogic = useMemo(() => {
         if (!isCouple) return null;
         const sA = parseFloat(settings.salaryA) || 0, sB = parseFloat(settings.salaryB) || 0, sT = sA + sB;
         const rA = sT > 0 ? sA / sT : 0.5, rB = sT > 0 ? sB / sT : 0.5;
         const sh = filteredTransactions.filter(t => t.scope === 'shared' && t.type === 'expense');
-        const tSh = sh.reduce((a, t) => a + t.value, 0);
-        const pA = sh.filter(t => t.paidBy === user.uid).reduce((a, t) => a + t.value, 0);
-        const pB = sh.filter(t => t.paidBy === userData?.partnerId).reduce((a, t) => a + t.value, 0);
-        return { totalSharedExp: tSh, ratioA: rA, ratioB: rB, balanceA: pA - (tSh * rA), balanceB: pB - (tSh * rB) };
-      }, [filteredTransactions, settings, isCouple, user.uid, userData?.partnerId]);
+        
+        let tSh = 0, pA = 0, pB = 0, expectedA = 0, expectedB = 0;
+        
+        sh.forEach(t => {
+          tSh += t.value;
+          
+          if (t.paidBy === user.uid) {
+            pA += t.value;
+          } else {
+            pB += t.value;
+          }
+          
+          const rule = t.splitRule || 'proportional';
+          
+          if (rule === 'proportional') { 
+            expectedA += t.value * rA; 
+            expectedB += t.value * rB; 
+          } 
+          else if (rule === '50_50') { 
+            expectedA += t.value * 0.5; 
+            expectedB += t.value * 0.5; 
+          } 
+          else if (rule === '100_me') { 
+            if (t.ownerId === user.uid) expectedA += t.value; 
+            else expectedB += t.value; 
+          } 
+          else if (rule === '100_partner') { 
+            if (t.ownerId === user.uid) expectedB += t.value; 
+            else expectedA += t.value; 
+          }
+        });
+        
+        return { 
+          totalSharedExp: tSh, 
+          ratioA: rA, 
+          ratioB: rB, 
+          balanceA: pA - expectedA, 
+          balanceB: pB - expectedB 
+        };
+      }, [filteredTransactions, settings, isCouple, user.uid]);
       
+      // Funções de CRUD - Transações
       const handleEditTx = (t) => {
-        setTxForm({ id: t.id, desc: t.desc || '', value: String(t.value || ''), type: t.type || 'expense', category: t.category || 'Alimentação', customCategory: '', date: t.date || getLocalDateString(), scope: t.scope || 'private', paidBy: t.paidBy || user.uid });
+        setTxForm({ 
+          id: t.id, 
+          desc: t.desc || '', 
+          value: String(t.value || ''), 
+          type: t.type || 'expense', 
+          category: t.category || 'Alimentação', 
+          customCategory: '', 
+          date: t.date || getLocalDateString(), 
+          scope: t.scope || 'private', 
+          splitRule: t.splitRule || 'proportional', 
+          paidBy: t.paidBy || user.uid 
+        });
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
       
       const handleSaveTx = async (e) => {
-        e.preventDefault(); const errors = {};
+        e.preventDefault(); 
+        const errors = {};
+        
         if (!txForm.desc.trim()) errors.desc = 'Descrição obrigatória';
         const val = parseFloat(txForm.value);
         if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
-        if (Object.keys(errors).length) { setFormErrors(p => ({...p, tx: errors})); return; }
+        
+        if (Object.keys(errors).length) { 
+          setFormErrors(p => ({...p, tx: errors})); 
+          return; 
+        }
+        
         const { id, ...txFormData } = txForm;
-        const payload = { ...txFormData, ownerId: user.uid, coupleId: txForm.scope === 'shared' ? userData.coupleId : null, category: txForm.customCategory.trim() || txForm.category, value: val, paidBy: user.uid };
+        const payload = { 
+          ...txFormData, 
+          ownerId: user.uid, 
+          coupleId: txForm.scope === 'shared' ? userData.coupleId : null, 
+          category: txForm.customCategory.trim() || txForm.category, 
+          value: val, 
+          splitRule: txForm.splitRule, 
+          paidBy: user.uid 
+        };
         
         try {
-          if (txForm.id) await DataService.updateTransaction(txForm.id, payload);
-          else await DataService.addTransaction(payload);
+          if (txForm.id) {
+            await DataService.updateTransaction(txForm.id, payload);
+          } else {
+            await DataService.addTransaction(payload);
+          }
+          
           setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId));
-          setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user.uid });
-          setFormErrors(p => ({...p, tx: {}})); showToast("Transação salva.");
-        } catch (err) { showToast('Erro ao salvar transação', true, err.message); }
+          setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', splitRule: 'proportional', paidBy: user.uid });
+          setFormErrors(p => ({...p, tx: {}})); 
+          showToast("Transação salva com sucesso.");
+        } catch (err) { 
+          showToast('Erro ao salvar transação', true, err.message); 
+        }
       };
       
       const handleDeleteTx = async (id) => {
-        if (!id) return; if (!window.confirm("Apagar esta transação?")) return;
-        try { await DataService.deleteTransaction(id); setTransactions(p => p.filter(t => t.id !== id)); showToast("Transação excluída."); } catch (err) { showToast('Erro ao excluir', true, err.message); }
+        if (!window.confirm("Deseja apagar esta transação?")) return;
+        try { 
+          await DataService.deleteTransaction(id); 
+          setTransactions(p => p.filter(t => t.id !== id)); 
+          showToast("Transação excluída.");
+        } catch (err) { 
+          showToast('Erro ao excluir', true, err.message); 
+        }
       };
       
-      const handleEditGoal = (g) => { setGoalForm({ id: g.id, name: g.name || '', target: String(g.target || '') }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-      const handleSaveGoal = async (e) => {
-        e.preventDefault(); const errors = {};
-        if (!goalForm.name.trim()) errors.name = 'Nome obrigatório';
-        const target = parseFloat(goalForm.target); if (isNaN(target) || target <= 0) errors.target = 'Valor inválido';
-        if (Object.keys(errors).length) { setFormErrors(p => ({...p, goal: errors})); return; }
-        const { id, ...goalFormData } = goalForm;
-        const payload = { ownerId: user.uid, coupleId: userData.coupleId, scope: isCouple ? 'shared' : 'private', name: goalFormData.name, target: goalFormData.target };
-        try {
-          if (goalForm.id) await DataService.updateGoal(goalForm.id, payload); else await DataService.addGoal(payload);
-          const newGoals = await DataService.getCollection('goals', user.uid, userData.coupleId);
-          setGoals(newGoals); await loadAllContributions(newGoals);
-          setGoalForm({ id: null, name: '', target: '' }); setFormErrors(p => ({...p, goal: {}}));
-          showToast(goalForm.id ? "Meta atualizada." : "Meta criada! Use '+ Aporte' para adicionar valores.");
-        } catch (err) { showToast('Erro', true, err.message); }
+      // Funções de CRUD - Metas
+      const handleEditGoal = (g) => { 
+        setGoalForm({ id: g.id, name: g.name || '', target: String(g.target || '') }); 
+        window.scrollTo({ top: 0, behavior: 'smooth' }); 
       };
+      
+      const handleSaveGoal = async (e) => {
+        e.preventDefault(); 
+        const errors = {};
+        
+        if (!goalForm.name.trim()) errors.name = 'Nome obrigatório';
+        const tg = parseFloat(goalForm.target);
+        if (isNaN(tg) || tg <= 0) errors.target = 'Valor inválido';
+        
+        if (Object.keys(errors).length) { 
+          setFormErrors(p => ({...p, goal: errors})); 
+          return; 
+        }
+        
+        const payload = { 
+          ownerId: user.uid, 
+          coupleId: userData.coupleId, 
+          scope: isCouple ? 'shared' : 'private', 
+          name: goalForm.name, 
+          target: tg 
+        };
+        
+        try {
+          if (goalForm.id) {
+            await DataService.updateGoal(goalForm.id, payload);
+          } else {
+            await DataService.addGoal(payload);
+          }
+          const newGoals = await DataService.getCollection('goals', user.uid, userData.coupleId);
+          setGoals(newGoals); 
+          await loadAllContributions(newGoals);
+          setGoalForm({ id: null, name: '', target: '' }); 
+          setFormErrors(p => ({...p, goal: {}}));
+          showToast(goalForm.id ? "Meta atualizada." : "Meta criada! Use '+ Aporte' para adicionar valores.");
+        } catch (err) { 
+          showToast('Erro ao salvar meta', true, err.message); 
+        }
+      };
+      
       const handleDeleteGoal = async (id) => {
-        if (!id) return; if (!window.confirm("Apagar esta meta e todos os aportes?")) return;
+        if (!window.confirm("Apagar esta meta e todos os seus aportes?")) return;
         try {
           const contribs = await DataService.getContributions(id);
-          for (const c of contribs) await DataService.deleteContribution(id, c.id);
-          await DataService.deleteGoal(id); setGoals(p => p.filter(g => g.id !== id));
-          setContributionsMap(p => { const n = {...p}; delete n[id]; return n; }); showToast("Meta excluída.");
-        } catch (err) { showToast('Erro', true, err.message); }
+          for (const c of contribs) {
+            await DataService.deleteContribution(id, c.id);
+          }
+          await DataService.deleteGoal(id); 
+          setGoals(p => p.filter(g => g.id !== id));
+          setContributionsMap(p => { const n = {...p}; delete n[id]; return n; }); 
+          showToast("Meta excluída com sucesso.");
+        } catch (err) { 
+          showToast('Erro ao excluir meta', true, err.message); 
+        }
       };
       
-      const handleEditSub = (s) => { setSubForm({ id: s.id, desc: s.desc || '', value: String(s.value || ''), category: s.category || 'Assinaturas', dayOfMonth: s.dayOfMonth || 1, scope: s.scope || 'private' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
+      // Funções de CRUD - Assinaturas
+      const handleEditSub = (s) => { 
+        setSubForm({ 
+          id: s.id, 
+          desc: s.desc || '', 
+          value: String(s.value || ''), 
+          category: s.category || 'Assinaturas', 
+          dayOfMonth: s.dayOfMonth || 1, 
+          interval: s.interval || 1, 
+          scope: s.scope || 'private', 
+          splitRule: s.splitRule || 'proportional' 
+        }); 
+        window.scrollTo({ top: 0, behavior: 'smooth' }); 
+      };
+      
       const handleSaveSub = async (e) => {
-        e.preventDefault(); const errors = {};
+        e.preventDefault(); 
+        const errors = {};
+        
         if (!subForm.desc.trim()) errors.desc = 'Descrição obrigatória';
-        const val = parseFloat(subForm.value); if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
-        if (Object.keys(errors).length) { setFormErrors(p => ({...p, sub: errors})); return; }
-        const { id, ...subFormData } = subForm;
-        const payload = { ...subFormData, ownerId: user.uid, coupleId: subForm.scope === 'shared' ? userData.coupleId : null, value: val, dayOfMonth: parseInt(subForm.dayOfMonth), active: true, category: subForm.category };
+        const val = parseFloat(subForm.value);
+        if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
+        
+        if (Object.keys(errors).length) { 
+          setFormErrors(p => ({...p, sub: errors})); 
+          return; 
+        }
+        
+        const { id, ...sf } = subForm; 
+        const payload = { 
+          ...sf, 
+          ownerId: user.uid, 
+          coupleId: subForm.scope === 'shared' ? userData.coupleId : null, 
+          value: val, 
+          dayOfMonth: parseInt(subForm.dayOfMonth), 
+          interval: parseInt(subForm.interval), 
+          splitRule: subForm.splitRule, 
+          active: true 
+        };
+        
         try {
-          if (subForm.id) await DataService.updateSubscription(subForm.id, payload); else await DataService.addSubscription(payload);
+          if (subForm.id) await DataService.updateSubscription(subForm.id, payload); 
+          else await DataService.addSubscription(payload);
+          
           setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId));
-          setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, scope: 'private' }); setFormErrors(p => ({...p, sub: {}})); showToast("Assinatura salva.");
-        } catch (err) { showToast('Erro', true, err.message); }
+          setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, interval: 1, scope: 'private', splitRule: 'proportional' }); 
+          setFormErrors(p => ({...p, sub: {}})); 
+          showToast("Assinatura salva.");
+        } catch (err) { 
+          showToast('Erro ao salvar assinatura', true, err.message); 
+        }
       };
+      
       const handleMarkSubAsPaid = async (sub) => {
-        if (!window.confirm(`Marcar "${sub.desc}" como paga este mês? Será criada uma transação de ${formatMoney(sub.value)}.`)) return;
+        if (!window.confirm(`Deseja marcar a assinatura "${sub.desc}" como paga agora?`)) return;
         try {
           const today = new Date();
-          const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
           const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-          await DataService.addTransaction({ desc: sub.desc, value: parseFloat(sub.value), type: 'expense', category: sub.category || 'Assinaturas', date, ownerId: user.uid, coupleId: sub.coupleId || null, scope: sub.scope || 'private', paidBy: user.uid, autoType: 'subscription_payment', subscriptionId: sub.id });
+          const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
+          // Gera transação
+          await DataService.addTransaction({ 
+            desc: sub.desc, 
+            value: parseFloat(sub.value), 
+            type: 'expense', 
+            category: sub.category || 'Assinaturas', 
+            date, 
+            ownerId: user.uid, 
+            coupleId: sub.coupleId || null, 
+            scope: sub.scope || 'private', 
+            splitRule: sub.splitRule || 'proportional', 
+            paidBy: user.uid, 
+            autoType: 'subscription_payment', 
+            subscriptionId: sub.id 
+          });
+          
+          // Atualiza status da assinatura
           await DataService.updateSubscription(sub.id, { lastPaidMonth: currentMonth });
-          setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId)); setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId)); showToast("Marcada como paga!");
-        } catch (err) { showToast('Erro', true, err.message); }
+          
+          setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId)); 
+          setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId)); 
+          showToast("Assinatura marcada como paga!");
+        } catch (err) { 
+          showToast('Erro ao registrar', true, err.message); 
+        }
       };
-      const handleToggleSub = async (sub) => { try { await DataService.updateSubscription(sub.id, { active: !sub.active }); setSubscriptions(p => p.map(s => s.id === sub.id ? {...s, active: !s.active} : s)); } catch (err) { showToast('Erro', true, err.message); } };
-      const handleDeleteSub = async (id) => { if (!id) return; if (!window.confirm("Apagar esta assinatura?")) return; try { await DataService.deleteSubscription(id); setSubscriptions(p => p.filter(s => s.id !== id)); } catch (err) { showToast('Erro', true, err.message); } };
       
-      const handleEditInst = (i) => { setInstForm({ id: i.id, desc: i.desc || '', installmentValue: String(i.installmentValue || ''), paidInstallments: i.paidInstallments || 0, totalInstallments: i.totalInstallments || 2, dayOfMonth: i.dayOfMonth || 1, category: i.category || 'Dívidas', scope: i.scope || 'private' }); window.scrollTo({ top: 0, behavior: 'smooth' }); };
-      const handleSaveInst = async (e) => {
-        e.preventDefault(); const errors = {};
-        if (!instForm.desc.trim()) errors.desc = 'Descrição obrigatória';
-        const val = parseFloat(instForm.installmentValue); if (isNaN(val) || val <= 0) errors.installmentValue = 'Valor inválido';
-        const tot = parseInt(instForm.totalInstallments); if (isNaN(tot) || tot < 2) errors.totalInstallments = 'Mínimo 2 parcelas';
-        if (Object.keys(errors).length) { setFormErrors(p => ({...p, inst: errors})); return; }
-        const paid = parseInt(instForm.paidInstallments) || 0; const { id, ...instFormData } = instForm;
-        const payload = { ...instFormData, ownerId: user.uid, coupleId: instForm.scope === 'shared' ? userData.coupleId : null, installmentValue: val, totalInstallments: tot, paidInstallments: paid, dayOfMonth: parseInt(instForm.dayOfMonth), active: paid < tot, category: instForm.category };
-        try {
-          if (instForm.id) await DataService.updateInstallment(instForm.id, payload); else await DataService.addInstallment(payload);
-          setInstallments(await DataService.getCollection('installments', user.uid, userData.coupleId));
-          setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas', scope: 'private' }); setFormErrors(p => ({...p, inst: {}})); showToast("Parcelamento salvo.");
-        } catch (err) { showToast('Erro', true, err.message); }
+      const handleToggleSub = async (sub) => { 
+        try { 
+          await DataService.updateSubscription(sub.id, { active: !sub.active }); 
+          setSubscriptions(p => p.map(s => s.id === sub.id ? {...s, active: !s.active} : s)); 
+        } catch (err) { 
+          showToast('Erro ao pausar', true, err.message); 
+        } 
       };
+      
+      const handleDeleteSub = async (id) => { 
+        if (!window.confirm("Deseja excluir definitivamente esta assinatura?")) return; 
+        try { 
+          await DataService.deleteSubscription(id); 
+          setSubscriptions(p => p.filter(s => s.id !== id)); 
+        } catch (err) { 
+          showToast('Erro ao excluir', true, err.message); 
+        } 
+      };
+      
+      // Funções de CRUD - Parcelamentos (Dívidas)
+      const handleEditInst = (i) => { 
+        setInstForm({ 
+          id: i.id, 
+          desc: i.desc || '', 
+          installmentValue: String(i.installmentValue || ''), 
+          paidInstallments: i.paidInstallments || 0, 
+          totalInstallments: i.totalInstallments || 2, 
+          dayOfMonth: i.dayOfMonth || 1, 
+          interval: i.interval || 1, 
+          category: i.category || 'Dívidas', 
+          scope: i.scope || 'private', 
+          splitRule: i.splitRule || 'proportional' 
+        }); 
+        window.scrollTo({ top: 0, behavior: 'smooth' }); 
+      };
+      
+      const handleSaveInst = async (e) => {
+        e.preventDefault(); 
+        const errors = {};
+        
+        if (!instForm.desc.trim()) errors.desc = 'Descrição obrigatória';
+        const val = parseFloat(instForm.installmentValue);
+        if (isNaN(val) || val <= 0) errors.installmentValue = 'Valor inválido';
+        const tot = parseInt(instForm.totalInstallments);
+        if (isNaN(tot) || tot < 2) errors.totalInstallments = 'Mínimo de 2 parcelas';
+        
+        if (Object.keys(errors).length) { 
+          setFormErrors(p => ({...p, inst: errors})); 
+          return; 
+        }
+        
+        const paid = parseInt(instForm.paidInstallments) || 0; 
+        const { id, ...idf } = instForm; 
+        const payload = { 
+          ...idf, 
+          ownerId: user.uid, 
+          coupleId: instForm.scope === 'shared' ? userData.coupleId : null, 
+          installmentValue: val, 
+          totalInstallments: tot, 
+          paidInstallments: paid, 
+          dayOfMonth: parseInt(instForm.dayOfMonth), 
+          interval: parseInt(instForm.interval), 
+          splitRule: instForm.splitRule, 
+          active: paid < tot 
+        };
+        
+        try {
+          if (instForm.id) await DataService.updateInstallment(instForm.id, payload); 
+          else await DataService.addInstallment(payload);
+          
+          setInstallments(await DataService.getCollection('installments', user.uid, userData.coupleId));
+          setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, interval: 1, category: 'Dívidas', scope: 'private', splitRule: 'proportional' }); 
+          setFormErrors(p => ({...p, inst: {}})); 
+          showToast("Dívida/Parcelamento salvo com sucesso.");
+        } catch (err) { 
+          showToast('Erro ao salvar dívida', true, err.message); 
+        }
+      };
+      
       const handleMarkInstAsPaid = async (inst) => {
-        if (!window.confirm(`Marcar parcela ${parseInt(inst.paidInstallments) + 1}/${inst.totalInstallments} de "${inst.desc}" como paga?`)) return;
+        if (!window.confirm(`Registrar pagamento da parcela ${parseInt(inst.paidInstallments) + 1}/${inst.totalInstallments} de "${inst.desc}"?`)) return;
         try {
           const today = new Date();
           const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
           const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-          await DataService.addTransaction({ desc: `${inst.desc} (${parseInt(inst.paidInstallments) + 1}/${inst.totalInstallments})`, value: parseFloat(inst.installmentValue), type: 'expense', category: inst.category || 'Dívidas', date, ownerId: user.uid, coupleId: inst.coupleId || null, scope: inst.scope || 'private', paidBy: user.uid, autoType: 'installment_payment', installmentId: inst.id });
+          
+          await DataService.addTransaction({ 
+            desc: `${inst.desc} (${parseInt(inst.paidInstallments) + 1}/${inst.totalInstallments})`, 
+            value: parseFloat(inst.installmentValue), 
+            type: 'expense', 
+            category: inst.category || 'Dívidas', 
+            date, 
+            ownerId: user.uid, 
+            coupleId: inst.coupleId || null, 
+            scope: inst.scope || 'private', 
+            splitRule: inst.splitRule || 'proportional', 
+            paidBy: user.uid, 
+            autoType: 'installment_payment', 
+            installmentId: inst.id 
+          });
+          
           const newPaid = parseInt(inst.paidInstallments) + 1;
-          await DataService.updateInstallment(inst.id, { paidInstallments: newPaid, active: newPaid < parseInt(inst.totalInstallments), lastPaidMonth: currentMonth });
-          setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId)); setInstallments(await DataService.getCollection('installments', user.uid, userData.coupleId)); showToast("Parcela paga!");
-        } catch (err) { showToast('Erro', true, err.message); }
+          await DataService.updateInstallment(inst.id, { 
+            paidInstallments: newPaid, 
+            active: newPaid < parseInt(inst.totalInstallments), 
+            lastPaidMonth: currentMonth 
+          });
+          
+          setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId)); 
+          setInstallments(await DataService.getCollection('installments', user.uid, userData.coupleId)); 
+          showToast("Parcela registrada e transação gerada!");
+        } catch (err) { 
+          showToast('Erro ao registrar', true, err.message); 
+        }
       };
-      const handleDeleteInst = async (id) => { if (!id) return; if (!window.confirm("Apagar este parcelamento?")) return; try { await DataService.deleteInstallment(id); setInstallments(p => p.filter(i => i.id !== id)); } catch (err) { showToast('Erro', true, err.message); } };
       
+      const handleDeleteInst = async (id) => { 
+        if (!window.confirm("Excluir este parcelamento de vez?")) return; 
+        try { 
+          await DataService.deleteInstallment(id); 
+          setInstallments(p => p.filter(i => i.id !== id)); 
+        } catch (err) { 
+          showToast('Erro ao excluir', true, err.message); 
+        } 
+      };
+      
+      // Funções de Orçamento, Configurações Casal e IA
       const handleSetBudget = async (e) => {
-        e.preventDefault(); const ownerId = isCouple ? userData.coupleId : user.uid;
-        const lim = parseFloat(budgetForm.limit); if (isNaN(lim) || lim <= 0) { setFormErrors(p => ({...p, budget: {limit: 'Valor inválido'}})); return; }
-        try { await DataService.setBudget(ownerId, budgetForm.category, lim); setBudgets(p => ({ ...p, [budgetForm.category]: lim })); setBudgetForm({ category: 'Alimentação', limit: '' }); setFormErrors(p => ({...p, budget: {}})); showToast("Orçamento definido."); } catch (err) { showToast('Erro', true, err.message); }
+        e.preventDefault(); 
+        const ownerId = isCouple ? userData.coupleId : user.uid;
+        const lim = parseFloat(budgetForm.limit); 
+        
+        if (isNaN(lim) || lim <= 0) {
+          setFormErrors(p => ({...p, budget: {limit: 'Valor inválido'}})); 
+          return; 
+        }
+        
+        try {
+          await DataService.setBudget(ownerId, budgetForm.category, lim);
+          setBudgets(p => ({ ...p, [budgetForm.category]: lim }));
+          setBudgetForm({ category: 'Alimentação', limit: '' });
+          setFormErrors(p => ({...p, budget: {}}));
+          showToast("Orçamento travado com sucesso.");
+        } catch (err) { 
+          showToast('Erro ao salvar orçamento', true, err.message); 
+        }
       };
-      const handleDeleteBudget = async (cat) => { const ownerId = isCouple ? userData.coupleId : user.uid; try { await DataService.deleteBudget(ownerId, cat); const b = {...budgets}; delete b[cat]; setBudgets(b); } catch (err) { showToast('Erro', true, err.message); } };
       
-      const handleUpdateCoupleSettings = async () => { try { await DataService.updateCouple(userData.coupleId, { settings: { nameA: settings.nameA, nameB: settings.nameB, salaryA: parseFloat(settings.salaryA) || 0, salaryB: parseFloat(settings.salaryB) || 0 } }); showToast("Configurações salvas."); } catch (err) { showToast('Erro', true, err.message); } };
-      const handleMigrateToSolo = async () => { if (!window.confirm("Tem certeza? Seu parceiro também voltará para o modo solo. Transações compartilhadas se tornarão pessoais.")) return; try { await DataService.dissolveCouple(user.uid, userData.coupleId); await refreshUserData(); showToast("Você voltou para o Modo Solo."); } catch (err) { showToast('Erro', true, err.message); } };
-      const handleRegenerateCode = async () => { try { const c = await DataService.regenerateInviteCode(userData.coupleId); setRegeneratedCode(c); setShowInviteCodeModal(true); } catch (err) { showToast('Erro', true, err.message); } };
+      const handleDeleteBudget = async (cat) => {
+        const ownerId = isCouple ? userData.coupleId : user.uid;
+        try {
+          await DataService.deleteBudget(ownerId, cat);
+          const b = {...budgets};
+          delete b[cat];
+          setBudgets(b);
+        } catch (err) {
+          showToast('Erro ao deletar orçamento', true, err.message);
+        }
+      };
+      
+      const handleUpdateCoupleSettings = async () => {
+        try {
+          await DataService.updateCouple(userData.coupleId, { 
+            settings: { 
+              nameA: settings.nameA, 
+              nameB: settings.nameB, 
+              salaryA: parseFloat(settings.salaryA) || 0, 
+              salaryB: parseFloat(settings.salaryB) || 0 
+            } 
+          });
+          showToast("Configurações do casal atualizadas.");
+        } catch (err) { 
+          showToast('Erro ao salvar', true, err.message); 
+        }
+      };
+      
+      const handleMigrateToSolo = async () => {
+        if (!window.confirm("Você tem certeza? Isso vai desfazer a conexão com seu parceiro. Transações compartilhadas se tornarão pessoais.")) return;
+        try {
+          await DataService.dissolveCouple(user.uid, userData.coupleId);
+          await refreshUserData();
+          showToast("Você voltou ao Modo Solo com sucesso.");
+        } catch (err) {
+          showToast('Erro ao separar casal', true, err.message);
+        }
+      };
+      
+      const handleRegenerateCode = async () => {
+        try {
+          const c = await DataService.regenerateInviteCode(userData.coupleId);
+          setRegeneratedCode(c);
+          setShowInviteCodeModal(true);
+        } catch (err) {
+          showToast('Erro ao gerar código', true, err.message);
+        }
+      };
       
       const generateAIReport = () => {
-        const r = []; const bal = totals.inc - totals.exp; const sr = totals.inc > 0 ? (bal / totals.inc) * 100 : 0;
-        if (totals.inc === 0) r.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda', text: 'Cadastre salários nas Config.' });
-        else if (totals.exp > totals.inc) r.push({ type: 'danger', icon: '🚨', title: 'Gastos Excedentes', text: `Gastou ${formatMoney(Math.abs(bal))} a mais.` });
-        else if (sr >= 20) r.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Poupou ${sr.toFixed(1)}% da renda.` });
-        else r.push({ type: 'warning', icon: '📉', title: 'Atenção', text: `Reteve ${sr.toFixed(1)}%.` });
-        if (totalSubscriptions > 0) { const subPct = totals.exp > 0 ? (totalSubscriptions / totals.exp) * 100 : 0; r.push({ type: 'info', icon: '🔁', title: 'Assinaturas', text: `${formatMoney(totalSubscriptions)} em custos fixos (${subPct.toFixed(1)}% das despesas).` }); }
+        const r = [];
+        const bal = totals.inc - totals.exp;
+        const sr = totals.inc > 0 ? (bal / totals.inc) * 100 : 0;
+        
+        if (totals.inc === 0) r.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda', text: 'Você não informou salários nas Configurações. Fica difícil calcular sobras.' });
+        else if (totals.exp > totals.inc) r.push({ type: 'danger', icon: '🚨', title: 'Gastos Excedentes', text: `Este mês você gastou ${formatMoney(Math.abs(bal))} além do que ganha.` });
+        else if (sr >= 20) r.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Excelente! Você conseguiu poupar ${sr.toFixed(1)}% da sua renda.` });
+        else r.push({ type: 'warning', icon: '📉', title: 'Atenção ao fluxo', text: `Você poupou apenas ${sr.toFixed(1)}%. Tente segurar os gastos secundários.` });
+        
+        if (totalSubscriptions > 0) {
+          const subPct = totals.exp > 0 ? (totalSubscriptions / totals.exp) * 100 : 0;
+          r.push({ type: 'info', icon: '🔁', title: 'Assinaturas', text: `Custos fixos tomam ${subPct.toFixed(1)}% das suas despesas totais (${formatMoney(totalSubscriptions)}).` });
+        }
+        
         const cats = Object.entries(categoriesTotal).sort((a,b)=>b[1].val - a[1].val);
-        if (cats.length > 0) r.push({ type: 'info', icon: '💡', title: `Foco: ${cats[0][0]}`, text: `${((cats[0][1].val / totals.exp)*100).toFixed(1)}% das despesas.` });
+        if (cats.length > 0) r.push({ type: 'info', icon: '💡', title: `Foco principal: ${cats[0][0]}`, text: `Sua maior torneira de gastos é a categoria ${cats[0][0]}, representando ${((cats[0][1].val / totals.exp)*100).toFixed(1)}% das despesas.` });
+        
         return r;
       };
       
-      if (loadingData) return <div className="min-h-screen flex items-center justify-center text-brand-500 font-bold text-xl animate-pulse">Carregando...</div>;
+      if (loadingData) return (
+        <div className="min-h-screen flex items-center justify-center bg-slate-50 dark:bg-[#050914]">
+          <div className="flex flex-col items-center">
+            <div className="w-12 h-12 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+            <p className="font-bold text-slate-500 dark:text-slate-400 animate-pulse">Sincronizando banco de dados...</p>
+          </div>
+        </div>
+      );
       
       const inputClass = "w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 transition-all text-sm";
       const labelClass = "block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
-      
+
       return (
         <div className="flex min-h-[100dvh] relative bg-slate-50 dark:bg-[#050914] pb-[80px] md:pb-0">
           
-          {/* SIDEBAR (Desktop) / BOTTOM BAR (Mobile) */}
+          {/* LAYOUT CORRIGIDO: BOTTOM BAR PARA MOBILE, SIDEBAR PARA PC */}
           <nav className="fixed bottom-0 left-0 right-0 z-50 w-full md:w-72 md:h-[100dvh] md:sticky md:top-0 bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl border-t md:border-t-0 md:border-r border-slate-200 dark:border-white/10 shadow-[0_-10px_40px_rgba(0,0,0,0.05)] md:shadow-none transition-all">
+            
             <div className="flex md:flex-col h-full w-full max-w-lg mx-auto md:max-w-none md:p-6 p-2 justify-between items-center md:items-stretch overflow-x-auto md:overflow-y-auto hide-scrollbar">
+              
               <div className="hidden md:flex items-center gap-3 mb-10 shrink-0">
                 <div className="w-12 h-12 flex items-center justify-center bg-white/50 dark:bg-slate-800/50 rounded-xl p-1 shadow-sm border border-slate-200 dark:border-white/10">
                   <div className="w-full h-full rounded-lg bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-xl">D</div>
@@ -1236,6 +2261,7 @@
                   <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">{isCouple ? 'Modo Casal' : 'Modo Solo'}</p>
                 </div>
               </div>
+              
               <div className="flex md:flex-col flex-1 justify-between md:justify-start gap-1 md:gap-2 w-full">
                 {[
                   { id: 'dashboard', icon: '📊', label: 'Início' },
@@ -1246,17 +2272,23 @@
                   { id: 'budgets', icon: '💰', label: 'Teto' },
                   { id: 'sync', icon: '⚙️', label: 'Ajustes' }
                 ].map(tab => (
-                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex flex-col md:flex-row items-center md:justify-start gap-1 md:gap-3 p-2 md:px-4 md:py-3 rounded-2xl transition-all duration-300 min-w-[64px] md:min-w-0 ${activeTab === tab.id ? 'bg-brand-50 dark:bg-slate-800 text-brand-600 dark:text-white md:bg-gradient-to-r md:from-slate-900 md:to-slate-800 md:text-white md:dark:from-white md:dark:to-slate-200 md:dark:text-slate-900 md:shadow-lg md:transform md:translate-x-1 border border-transparent md:border-white/10' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'}`} aria-current={activeTab === tab.id ? 'page' : undefined}>
-                    <span className="text-xl md:text-xl drop-shadow-sm transition-transform group-hover:scale-110" aria-hidden="true">{tab.icon}</span>
+                  <button 
+                    key={tab.id} 
+                    onClick={() => setActiveTab(tab.id)} 
+                    className={`flex flex-col md:flex-row items-center md:justify-start gap-1 md:gap-3 p-2 md:px-4 md:py-3 rounded-2xl transition-all duration-300 min-w-[64px] md:min-w-0 ${activeTab === tab.id ? 'bg-brand-50 dark:bg-slate-800 text-brand-600 dark:text-white md:bg-gradient-to-r md:from-slate-900 md:to-slate-800 md:text-white md:dark:from-white md:dark:to-slate-200 md:dark:text-slate-900 md:shadow-lg md:transform md:translate-x-1 border border-transparent md:border-white/10' : 'text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                  >
+                    <span className="text-xl md:text-xl drop-shadow-sm transition-transform group-hover:scale-110">{tab.icon}</span>
                     <span className="text-[10px] md:text-sm font-bold md:font-semibold tracking-wide whitespace-nowrap">{tab.label}</span>
                   </button>
                 ))}
               </div>
-              <button onClick={signOut} className="hidden md:flex mt-auto items-center justify-center gap-2 px-4 py-3 rounded-2xl text-slate-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-600 transition-all text-sm font-semibold shrink-0 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/50">🚪 Sair do App</button>
+              
+              <button onClick={signOut} className="hidden md:flex mt-auto items-center justify-center gap-2 px-4 py-3 rounded-2xl text-slate-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-600 transition-all text-sm font-semibold shrink-0 border border-transparent hover:border-rose-200 dark:hover:border-rose-800/50">
+                🚪 Sair do App
+              </button>
             </div>
           </nav>
           
-          {/* MAIN CONTENT */}
           <main className="flex-1 w-full max-w-full overflow-x-hidden min-h-[100dvh]">
             <div className="w-full h-full p-4 md:p-10 mx-auto max-w-7xl animate-fade-in">
               
@@ -1269,33 +2301,43 @@
                     <p className="text-[9px] text-slate-500 uppercase font-black tracking-widest">{isCouple ? 'Casal' : 'Solo'}</p>
                   </div>
                 </div>
-                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-full shadow-sm border border-slate-200 dark:border-slate-700" aria-label="Alternar tema">
+                <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="w-10 h-10 flex items-center justify-center bg-white dark:bg-slate-800 rounded-full shadow-sm border border-slate-200 dark:border-slate-700">
                   {theme === 'dark' ? '☀️' : '🌙'}
                 </button>
               </header>
             
               <div className="space-y-8 pb-10">
-                {/* HEADER GLOBAL */}
+                
+                {/* CABEÇALHO GLOBAL (Mês e Saldo) */}
                 <div className="flex flex-wrap items-center justify-between gap-4 glass-card p-5 rounded-3xl">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-xl shadow-inner border border-transparent dark:border-white/5" aria-hidden="true">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800/80 flex items-center justify-center text-xl shadow-inner border border-transparent dark:border-white/5">
                       <span className="dark:filter dark:brightness-110">📅</span>
                     </div>
-                    <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-transparent font-bold text-lg md:text-xl outline-none cursor-pointer text-slate-700 dark:text-slate-100 [color-scheme:light] dark:[color-scheme:dark]" />
+                    <input 
+                      type="month" 
+                      value={monthFilter} 
+                      onChange={(e) => setMonthFilter(e.target.value)} 
+                      className="bg-transparent font-bold text-lg md:text-xl outline-none cursor-pointer text-slate-700 dark:text-slate-100 [color-scheme:light] dark:[color-scheme:dark]" 
+                    />
                   </div>
                   <div className="text-right">
                     <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em] mb-1">Saldo Mensal</p>
-                    <p className={`text-3xl font-black tracking-tight drop-shadow-sm ${totals.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.balance)}</p>
+                    <p className={`text-3xl font-black tracking-tight drop-shadow-sm ${totals.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>
+                      {formatMoney(totals.balance)}
+                    </p>
                   </div>
                 </div>
                 
-                {/* ===== ABA DASHBOARD ===== */}
+                {/* ABA INÍCIO (DASHBOARD) */}
                 {activeTab === 'dashboard' && (
                   <div className="space-y-6 animate-slide-up">
+                    
                     {isCouple && splitLogic && (
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <BentoCard className="md:col-span-2 border-white/60 dark:border-white/5 overflow-hidden relative" title="Acerto de Contas" icon="🤝">
+                        <BentoCard className="md:col-span-2 border-white/60 dark:border-white/5 overflow-hidden relative" title="Acerto de Contas (Levando em conta regras de Rateio)" icon="🤝">
                           <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                          
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 relative z-10">
                             <div className="p-4 bg-slate-100/80 dark:bg-white/10 rounded-2xl border border-slate-200 dark:border-white/10">
                               <p className="text-[10px] text-slate-500 dark:text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p>
@@ -1310,9 +2352,10 @@
                               <p className="text-xl font-black text-partner-600 dark:text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p>
                             </div>
                           </div>
+                          
                           <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-slate-100/50 dark:bg-black/30 rounded-2xl border border-slate-200 dark:border-white/5 relative z-10">
                             <div>
-                              <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Gastos Compartilhados</p>
+                              <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Total de Gastos Compartilhados</p>
                               <p className="text-3xl font-black mt-1 text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(splitLogic.totalSharedExp)}</p>
                             </div>
                             <div className="text-center md:text-right">
@@ -1330,6 +2373,7 @@
                             </div>
                           </div>
                         </BentoCard>
+                        
                         <BentoCard title="Resumo" icon="📈">
                           <div className="space-y-4">
                             <div className="p-5 rounded-2xl bg-brand-50/60 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50 hover:scale-[1.02] transition-transform">
@@ -1362,7 +2406,11 @@
                       </div>
                     )}
                     
-                    <BentoCard title="Assinaturas Ativas" icon="🔁" action={<button onClick={() => setActiveTab('subscriptions')} className="text-xs text-brand-500 hover:text-brand-600 font-bold uppercase tracking-wider">Ver todas →</button>}>
+                    <BentoCard 
+                      title="Assinaturas Ativas" 
+                      icon="🔁" 
+                      action={<button onClick={() => setActiveTab('subscriptions')} className="text-xs text-brand-500 hover:text-brand-600 font-bold uppercase tracking-wider">Ver todas →</button>}
+                    >
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                         <div className="p-4 rounded-2xl bg-rose-50/60 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50">
                           <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Custo Fixo Mensal</p>
@@ -1390,28 +2438,13 @@
                           </div>
                         )}
                       </div>
-                      {subscriptions.filter(s => s.active).length > 0 && (
-                        <div className="space-y-2 max-h-48 overflow-y-auto custom-scrollbar pr-2">
-                          {Object.entries(
-                            subscriptions.filter(s => s.active).reduce((a, s) => { 
-                              if (!a[s.category]) a[s.category] = { total: 0, count: 0 }; 
-                              a[s.category].total += parseFloat(s.value); a[s.category].count += 1; return a; 
-                            }, {})
-                          ).sort((a, b) => b[1].total - a[1].total).map(([cat, d]) => (
-                            <div key={cat} className="flex justify-between items-center text-sm p-2 rounded-lg hover:bg-slate-100/50 dark:hover:bg-slate-800/50">
-                              <div className="flex items-center gap-2">
-                                <span className="font-semibold text-slate-700 dark:text-slate-200">{cat}</span>
-                                <span className="text-[10px] text-slate-500">{d.count}x</span>
-                              </div>
-                              <span className="font-bold">{formatMoney(d.total)}</span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </BentoCard>
                     
                     <div className="flex justify-end">
-                      <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white shadow-[0_10px_30px_rgba(139,92,246,0.3)]'}`} aria-expanded={showAI}>
+                      <button 
+                        onClick={() => setShowAI(!showAI)} 
+                        className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white shadow-[0_10px_30px_rgba(139,92,246,0.3)]'}`}
+                      >
                         <span className="animate-pulse">✨</span> {showAI ? 'Ocultar Inteligência' : 'Analisar Finanças com IA'}
                       </button>
                     </div>
@@ -1449,7 +2482,6 @@
                     </div>
                   </div>
                 )}
-                
                 {/* ===== ABA TRANSAÇÕES ===== */}
                 {activeTab === 'transactions' && (
                   <div className="space-y-6 animate-slide-up">
@@ -1462,82 +2494,172 @@
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 relative z-10 gap-4">
                         <h3 className="font-extrabold text-xl">{txForm.id ? 'Editar Transação' : 'Nova Transação'}</h3>
                         {!txForm.id && (
-                          <button type="button" onClick={() => setIsScanning(true)} className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg hover:-translate-y-0.5 transition-all">
+                          <button 
+                            type="button" 
+                            onClick={() => setIsScanning(true)} 
+                            className="flex items-center gap-2 bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-5 py-2.5 rounded-xl text-xs font-bold shadow-lg hover:-translate-y-0.5 transition-all"
+                          >
                             <span className="text-lg">📷</span> Ler NFC-e / PIX
                           </button>
                         )}
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-5 relative z-10">
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-5 relative z-10">
                         <div className="md:col-span-2">
                           <label className={labelClass}>Descrição</label>
-                          <input type="text" value={txForm.desc} onChange={e=>setTxForm({...txForm, desc: e.target.value})} className={`${inputClass} ${formErrors.tx.desc ? 'field-error' : ''}`} placeholder="Ex: Supermercado" />
+                          <input 
+                            type="text" 
+                            value={txForm.desc} 
+                            onChange={e => setTxForm({...txForm, desc: e.target.value})} 
+                            className={`${inputClass} ${formErrors.tx.desc ? 'field-error' : ''}`} 
+                            placeholder="Ex: Supermercado" 
+                          />
                           {formErrors.tx.desc && <div className="error-message">⚠️ {formErrors.tx.desc}</div>}
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Valor (R$)</label>
-                          <input type="number" step="0.01" value={txForm.value} onChange={e=>setTxForm({...txForm, value: e.target.value})} className={`${inputClass} ${formErrors.tx.value ? 'field-error' : ''}`} placeholder="0,00" />
+                          <input 
+                            type="number" 
+                            step="0.01" 
+                            value={txForm.value} 
+                            onChange={e => setTxForm({...txForm, value: e.target.value})} 
+                            className={`${inputClass} ${formErrors.tx.value ? 'field-error' : ''}`} 
+                            placeholder="0,00" 
+                          />
                           {formErrors.tx.value && <div className="error-message">⚠️ {formErrors.tx.value}</div>}
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Categoria</label>
-                          <select value={txForm.category} onChange={e=>setTxForm({...txForm, category: e.target.value})} className={inputClass}>
-                            {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
+                          <select 
+                            value={txForm.category} 
+                            onChange={e => setTxForm({...txForm, category: e.target.value})} 
+                            className={inputClass}
+                          >
+                            {predefinedCategories.map(c => <option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Categoria Personalizada (opcional)</label>
-                          <input type="text" value={txForm.customCategory} onChange={e=>setTxForm({...txForm, customCategory: e.target.value})} className={inputClass} placeholder="Ou crie uma nova" />
+                          <input 
+                            type="text" 
+                            value={txForm.customCategory} 
+                            onChange={e => setTxForm({...txForm, customCategory: e.target.value})} 
+                            className={inputClass} 
+                            placeholder="Ou crie uma nova" 
+                          />
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Tipo</label>
-                          <select value={txForm.type} onChange={e=>setTxForm({...txForm, type: e.target.value})} className={inputClass}>
+                          <select 
+                            value={txForm.type} 
+                            onChange={e => setTxForm({...txForm, type: e.target.value})} 
+                            className={inputClass}
+                          >
                             <option value="expense">Despesa</option>
                             <option value="income">Receita</option>
                           </select>
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Data</label>
-                          <input type="date" value={txForm.date} onChange={e=>setTxForm({...txForm, date: e.target.value})} className={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`} />
+                          <input 
+                            type="date" 
+                            value={txForm.date} 
+                            onChange={e => setTxForm({...txForm, date: e.target.value})} 
+                            className={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`} 
+                          />
                         </div>
+                        
                         {isCouple && (
                           <div>
                             <label className={labelClass}>Visibilidade</label>
-                            <select value={txForm.scope} onChange={e=>setTxForm({...txForm, scope: e.target.value})} className={inputClass}>
+                            <select 
+                              value={txForm.scope} 
+                              onChange={e => setTxForm({...txForm, scope: e.target.value})} 
+                              className={inputClass}
+                            >
                               <option value="private">🔒 Pessoal (só eu)</option>
                               <option value="shared">👥 Compartilhada (casal)</option>
                             </select>
                           </div>
                         )}
+                        
+                        {/* NOVO: REGRA DE RATEIO (Só aparece se for compartilhado com o casal) */}
+                        {isCouple && txForm.scope === 'shared' && (
+                          <div className="md:col-span-2">
+                            <label className={labelClass}>Divisão (Rateio)</label>
+                            <select 
+                              value={txForm.splitRule} 
+                              onChange={e => setTxForm({...txForm, splitRule: e.target.value})} 
+                              className={inputClass}
+                            >
+                              <option value="proportional">⚖️ Proporcional à Renda (Padrão)</option>
+                              <option value="50_50">➗ Meio a Meio (50/50)</option>
+                              <option value="100_me">🙋‍♂️ Eu pago tudo (100%)</option>
+                              <option value="100_partner">🙋‍♀️ {partnerData?.name?.split(' ')[0] || 'Parceiro(a)'} paga tudo (100%)</option>
+                            </select>
+                          </div>
+                        )}
+                        
                         <div className="col-span-full flex justify-end gap-3 mt-2">
-                          {txForm.id && <button type="button" onClick={()=>{setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user.uid }); setFormErrors(p => ({...p, tx: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
-                          <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:shadow-[0_15px_30px_rgba(20,184,166,0.4)] hover:-translate-y-0.5 transition-all">{txForm.id ? 'Atualizar' : 'Salvar'}</button>
+                          {txForm.id && (
+                            <button 
+                              type="button" 
+                              onClick={() => {
+                                setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', splitRule: 'proportional', paidBy: user.uid }); 
+                                setFormErrors(p => ({...p, tx: {}}));
+                              }} 
+                              className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold hover:bg-slate-300 transition-colors"
+                            >
+                              Cancelar
+                            </button>
+                          )}
+                          <button 
+                            type="submit" 
+                            className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:shadow-[0_15px_30px_rgba(20,184,166,0.4)] hover:-translate-y-0.5 transition-all"
+                          >
+                            {txForm.id ? 'Atualizar Transação' : 'Salvar Transação'}
+                          </button>
                         </div>
                       </div>
                     </form>
                     
-                    <BentoCard title={`Transações de ${monthFilter}`}>
+                    <BentoCard title={`Histórico de ${monthFilter.split('-').reverse().join('/')}`}>
                       <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
-                        {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400 font-medium">Nenhuma transação neste mês.</p> : filteredTransactions.map((t, index) => (
-                          <div key={t.id} className="flex justify-between items-center p-5 rounded-2xl bg-slate-100/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
-                            <div>
-                              <p className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100 text-base">
-                                {t.desc} 
-                                {t.scope === 'shared' && <span className="text-[9px] bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm">Compart.</span>}
-                                {t.scope === 'private' && <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm">Pessoal</span>}
-                                {t.autoType && <span className="text-[9px] bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest">Auto</span>}
-                              </p>
-                              <p className="text-xs text-slate-500 mt-1 font-medium">{t.category} • {t.date?.split('-').reverse().join('/')}</p>
-                            </div>
-                            <div className="flex items-center gap-5">
-                              <span className={`font-black text-lg drop-shadow-sm ${t.type==='income'?'text-brand-500 dark:text-brand-400':'text-slate-800 dark:text-white'}`}>{t.type==='income'?'+':'-'}{formatMoney(t.value)}</span>
-                              <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
-                                <button type="button" onClick={()=>handleEditTx(t)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-brand-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Editar">✏️</button>
-                                <button type="button" onClick={()=>handleDeleteTx(t.id)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Excluir">🗑️</button>
+                        {filteredTransactions.length === 0 ? (
+                          <p className="text-center py-10 text-slate-400 font-medium">Nenhuma transação neste mês.</p>
+                        ) : (
+                          filteredTransactions.map((t, index) => (
+                            <div key={t.id} className="flex justify-between items-center p-5 rounded-2xl bg-slate-100/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+                              <div>
+                                <p className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100 text-base">
+                                  {t.desc} 
+                                  {t.scope === 'shared' && (
+                                    <span className="text-[9px] bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm" title="Rateio">
+                                      Compart. ({t.splitRule==='50_50' ? '50/50' : t.splitRule==='100_me' ? 'Eu' : t.splitRule==='100_partner' ? 'Parc.' : 'Prop.'})
+                                    </span>
+                                  )}
+                                  {t.scope === 'private' && <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm">Pessoal</span>}
+                                  {t.autoType && <span className="text-[9px] bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest">Auto</span>}
+                                </p>
+                                <p className="text-xs text-slate-500 mt-1 font-medium">{t.category} • {t.date?.split('-').reverse().join('/')}</p>
+                              </div>
+                              <div className="flex items-center gap-5">
+                                <span className={`font-black text-lg drop-shadow-sm ${t.type==='income' ? 'text-brand-500 dark:text-brand-400' : 'text-slate-800 dark:text-white'}`}>
+                                  {t.type === 'income' ? '+' : '-'}{formatMoney(t.value)}
+                                </span>
+                                <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                                  <button type="button" onClick={() => handleEditTx(t)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-brand-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Editar">✏️</button>
+                                  <button type="button" onClick={() => handleDeleteTx(t.id)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Excluir">🗑️</button>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </BentoCard>
                   </div>
@@ -1548,6 +2670,7 @@
                   <div className="space-y-6 animate-slide-up">
                     <form onSubmit={handleSaveSub} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
                       <div className="absolute right-0 bottom-0 w-64 h-64 bg-partner-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                      
                       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 relative z-10">
                         <h3 className="font-extrabold text-xl">{subForm.id ? 'Editar Assinatura' : 'Nova Assinatura'}</h3>
                         <div className="mt-4 md:mt-0 px-5 py-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 dark:border-rose-800/50 shadow-inner">
@@ -1555,27 +2678,38 @@
                           <p className="font-black text-rose-600 dark:text-rose-400 text-xl">{formatMoney(totalSubscriptions)}</p>
                         </div>
                       </div>
+                      
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end relative z-10">
                         <div className="lg:col-span-2">
                           <label className={labelClass}>Serviço</label>
-                          <input type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className={`${inputClass} ${formErrors.sub.desc ? 'field-error' : ''}`} placeholder="Ex: Netflix, Spotify" />
+                          <input type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className={`${inputClass} ${formErrors.sub.desc ? 'field-error' : ''}`} placeholder="Ex: Netflix, Internet" />
                           {formErrors.sub.desc && <div className="error-message">⚠️ {formErrors.sub.desc}</div>}
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Valor (R$)</label>
                           <input type="number" step="0.01" value={subForm.value} onChange={e=>setSubForm({...subForm, value: e.target.value})} className={`${inputClass} ${formErrors.sub.value ? 'field-error' : ''}`} placeholder="0,00" />
                           {formErrors.sub.value && <div className="error-message">⚠️ {formErrors.sub.value}</div>}
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Dia Venc.</label>
                           <input type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className={`${inputClass} text-center`} />
                         </div>
+                        
+                        {/* NOVO: PERIODICIDADE */}
+                        <div>
+                          <label className={labelClass}>Repete a cada (meses)</label>
+                          <input type="number" min="1" value={subForm.interval} onChange={e=>setSubForm({...subForm, interval: e.target.value})} className={`${inputClass} text-center`} title="Ex: 1 para Mensal, 2 para Bimestral, 12 para Anual" />
+                        </div>
+                        
                         <div>
                           <label className={labelClass}>Categoria</label>
                           <select value={subForm.category} onChange={e=>setSubForm({...subForm, category: e.target.value})} className={inputClass}>
                             {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
+                        
                         {isCouple && (
                           <div>
                             <label className={labelClass}>Visibilidade</label>
@@ -1585,8 +2719,24 @@
                             </select>
                           </div>
                         )}
+                        
+                        {/* NOVO: RATEIO */}
+                        {isCouple && subForm.scope === 'shared' && (
+                          <div>
+                            <label className={labelClass}>Divisão (Rateio)</label>
+                            <select value={subForm.splitRule} onChange={e=>setSubForm({...subForm, splitRule: e.target.value})} className={inputClass}>
+                              <option value="proportional">⚖️ Proporcional</option>
+                              <option value="50_50">➗ 50/50</option>
+                              <option value="100_me">🙋‍♂️ Eu 100%</option>
+                              <option value="100_partner">🙋‍♀️ Parc. 100%</option>
+                            </select>
+                          </div>
+                        )}
+                        
                         <div className="col-span-full flex justify-end gap-3 mt-4">
-                          {subForm.id && <button type="button" onClick={()=>{setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, scope: 'private' }); setFormErrors(p => ({...p, sub: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
+                          {subForm.id && (
+                            <button type="button" onClick={()=>{setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1, interval: 1, scope: 'private', splitRule: 'proportional' }); setFormErrors(p => ({...p, sub: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>
+                          )}
                           <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">{subForm.id ? 'Atualizar' : 'Salvar'}</button>
                         </div>
                       </div>
@@ -1602,8 +2752,10 @@
                             const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                             const aPaid = a.lastPaidMonth === currentMonth;
                             const bPaid = b.lastPaidMonth === currentMonth;
-                            const aDue = calcNextDue(Number(a.dayOfMonth));
-                            const bDue = calcNextDue(Number(b.dayOfMonth));
+                            
+                            // Calcula as datas usando a nova função com intervalo (periodicidade)
+                            const aDue = calcNextDue(Number(a.dayOfMonth), Number(a.interval || 1), a.lastPaidMonth);
+                            const bDue = calcNextDue(Number(b.dayOfMonth), Number(b.interval || 1), b.lastPaidMonth);
                             
                             if (a.active !== b.active) return a.active ? -1 : 1;
                             if (aPaid !== bPaid) return aPaid ? 1 : -1;
@@ -1612,7 +2764,7 @@
                             return aDue.diffDays - bDue.diffDays;
                           })
                           .map((s, idx) => {
-                            const due = calcNextDue(Number(s.dayOfMonth));
+                            const due = calcNextDue(Number(s.dayOfMonth), Number(s.interval || 1), s.lastPaidMonth);
                             const today = new Date();
                             const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                             const isPaidThisMonth = s.lastPaidMonth === currentMonth;
@@ -1629,7 +2781,11 @@
                                   <div>
                                     <h4 className="font-extrabold text-lg flex items-center gap-2 flex-wrap">
                                       {s.desc}
-                                      {isCouple && <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>{s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}</span>}
+                                      {isCouple && (
+                                        <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>
+                                          {s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}
+                                        </span>
+                                      )}
                                     </h4>
                                     <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p>
                                   </div>
@@ -1641,9 +2797,10 @@
                                 
                                 {s.active && isPaidThisMonth && (
                                   <div className="mb-4 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                    ✓ Paga este mês
+                                    ✓ Paga no ciclo atual
                                   </div>
                                 )}
+                                
                                 {s.active && !isPaidThisMonth && (
                                   <div className={`mb-4 px-3 py-2 rounded-xl text-xs font-bold ${due.isLate ? 'bg-rose-50 dark:bg-rose-900/20 text-rose-700 dark:text-rose-300 border border-rose-200 dark:border-rose-800' : 'bg-amber-50 dark:bg-amber-900/20 text-amber-700 dark:text-amber-300 border border-amber-200 dark:border-amber-800'}`}>
                                     {statusTexto}
@@ -1656,18 +2813,21 @@
                                     <p className="font-black text-3xl tracking-tight text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(s.value)}</p>
                                   </div>
                                   <div className="text-right">
-                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Dia</p>
-                                    <p className="font-black text-xl text-brand-500 drop-shadow-sm">{s.dayOfMonth}</p>
+                                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Próx. Venc.</p>
+                                    <p className="font-black text-xl text-brand-500 drop-shadow-sm">Dia {due.dueDate.getDate()}</p>
+                                    <p className="text-[9px] text-slate-500 uppercase font-bold mt-1">A CADA {s.interval || 1} MÊS(ES)</p>
                                   </div>
                                 </div>
                                 
                                 <div className="space-y-2">
                                   {s.active && !isPaidThisMonth && (
                                     <button onClick={()=>handleMarkSubAsPaid(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm shadow-lg transition-all ${due.isLate ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>
-                                      {due.isLate ? '⚠️ Marcar como Paga (Atrasada)' : '✓ Marcar como Paga'}
+                                      {due.isLate ? '⚠️ Marcar como Paga (Atrasada)' : '✓ Registrar Pagamento'}
                                     </button>
                                   )}
-                                  <button onClick={()=>handleToggleSub(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-lg shadow-brand-500/30'}`}>{s.active ? 'Pausar' : 'Reativar'}</button>
+                                  <button onClick={()=>handleToggleSub(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-lg shadow-brand-500/30'}`}>
+                                    {s.active ? 'Pausar' : 'Reativar'}
+                                  </button>
                                 </div>
                               </div>
                             );
@@ -1677,42 +2837,55 @@
                   </div>
                 )}
                 
-                {/* ===== ABA PARCELAS ===== */}
+                {/* ===== ABA PARCELAS / DÍVIDAS ===== */}
                 {activeTab === 'installments' && (
                   <div className="space-y-6 animate-slide-up">
                     <form onSubmit={handleSaveInst} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
                       <div className="absolute left-0 bottom-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
-                      <h3 className="font-extrabold text-xl mb-6 relative z-10">{instForm.id ? 'Editar Parcelamento' : 'Novo Parcelamento'}</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-5 items-end relative z-10">
+                      <h3 className="font-extrabold text-xl mb-6 relative z-10">{instForm.id ? 'Editar Dívida/Parcelamento' : 'Nova Dívida/Parcelamento'}</h3>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end relative z-10">
                         <div className="lg:col-span-2">
-                          <label className={labelClass}>Compra</label>
-                          <input type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} placeholder="Ex: iPhone" />
+                          <label className={labelClass}>Compra / Dívida</label>
+                          <input type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} placeholder="Ex: iPhone, Financiamento Casa" />
                           {formErrors.inst.desc && <div className="error-message">⚠️ {formErrors.inst.desc}</div>}
                         </div>
+                        
                         <div>
-                          <label className={labelClass}>Parcela (R$)</label>
+                          <label className={labelClass}>Valor da Parcela</label>
                           <input type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} placeholder="0,00" />
                           {formErrors.inst.installmentValue && <div className="error-message">⚠️ {formErrors.inst.installmentValue}</div>}
                         </div>
+                        
                         <div>
-                          <label className={labelClass}>Total Parc.</label>
+                          <label className={labelClass}>Total de Parcelas</label>
                           <input type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className={`${inputClass} ${formErrors.inst.totalInstallments ? 'field-error' : ''} text-center`} />
                           {formErrors.inst.totalInstallments && <div className="error-message">⚠️ {formErrors.inst.totalInstallments}</div>}
                         </div>
+                        
                         <div>
                           <label className={labelClass}>Já Pagas</label>
                           <input type="number" min="0" max={instForm.totalInstallments || 99} value={instForm.paidInstallments} onChange={e=>setInstForm({...instForm, paidInstallments: e.target.value})} className={`${inputClass} text-center`} />
                         </div>
+                        
                         <div>
-                          <label className={labelClass}>Venc.</label>
+                          <label className={labelClass}>Dia Venc.</label>
                           <input type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className={`${inputClass} text-center`} />
                         </div>
+                        
+                        {/* NOVO: PERIODICIDADE E RATEIO NAS PARCELAS */}
+                        <div>
+                          <label className={labelClass}>A cada (meses)</label>
+                          <input type="number" min="1" value={instForm.interval} onChange={e=>setInstForm({...instForm, interval: e.target.value})} className={`${inputClass} text-center`} title="Ex: 1 para Mensal, 2 para Bimestral" />
+                        </div>
+                        
                         <div>
                           <label className={labelClass}>Categoria</label>
                           <select value={instForm.category} onChange={e=>setInstForm({...instForm, category: e.target.value})} className={inputClass}>
                             {predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}
                           </select>
                         </div>
+                        
                         {isCouple && (
                           <div>
                             <label className={labelClass}>Visibilidade</label>
@@ -1722,9 +2895,24 @@
                             </select>
                           </div>
                         )}
+                        
+                        {isCouple && instForm.scope === 'shared' && (
+                          <div>
+                            <label className={labelClass}>Divisão (Rateio)</label>
+                            <select value={instForm.splitRule} onChange={e=>setInstForm({...instForm, splitRule: e.target.value})} className={inputClass}>
+                              <option value="proportional">⚖️ Proporcional</option>
+                              <option value="50_50">➗ 50/50</option>
+                              <option value="100_me">🙋‍♂️ Eu 100%</option>
+                              <option value="100_partner">🙋‍♀️ Parc. 100%</option>
+                            </select>
+                          </div>
+                        )}
+                        
                         <div className="col-span-full flex justify-end gap-3 mt-4">
-                          {instForm.id && <button type="button" onClick={()=>{setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas', scope: 'private' }); setFormErrors(p => ({...p, inst: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>}
-                          <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">{instForm.id ? 'Atualizar' : 'Salvar'}</button>
+                          {instForm.id && (
+                            <button type="button" onClick={()=>{setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, interval: 1, category: 'Dívidas', scope: 'private', splitRule: 'proportional' }); setFormErrors(p => ({...p, inst: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold">Cancelar</button>
+                          )}
+                          <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">{instForm.id ? 'Atualizar' : 'Salvar Dívida'}</button>
                         </div>
                       </div>
                     </form>
@@ -1741,8 +2929,9 @@
                               const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
                               const aPaid = a.lastPaidMonth === currentMonth;
                               const bPaid = b.lastPaidMonth === currentMonth;
-                              const aDue = calcNextDue(Number(a.dayOfMonth));
-                              const bDue = calcNextDue(Number(b.dayOfMonth));
+                              
+                              const aDue = calcNextDue(Number(a.dayOfMonth), Number(a.interval || 1), a.lastPaidMonth);
+                              const bDue = calcNextDue(Number(b.dayOfMonth), Number(b.interval || 1), b.lastPaidMonth);
                               
                               if (a.active !== b.active) return a.active ? -1 : 1;
                               if (aPaid !== bPaid) return aPaid ? 1 : -1;
@@ -1754,7 +2943,7 @@
                               const cur = parseInt(i.paidInstallments) || 0;
                               const tot = parseInt(i.totalInstallments);
                               const pct = tot > 0 ? (cur / tot) * 100 : 0;
-                              const due = calcNextDue(Number(i.dayOfMonth));
+                              const due = calcNextDue(Number(i.dayOfMonth), Number(i.interval || 1), i.lastPaidMonth);
                               const remaining = tot - cur;
                               
                               const today = new Date();
@@ -1766,7 +2955,7 @@
                               const diasVenceTexto = due.diffDays !== 1 ? "dias" : "dia";
                               const statusTexto = isLate 
                                 ? `⚠️ Atrasada há ${due.daysLate} ${diasAtrasoTexto}` 
-                                : `📅 Vence em ${due.diffDays} ${diasVenceTexto} (dia ${i.dayOfMonth})`;
+                                : `📅 Vence em ${due.diffDays} ${diasVenceTexto} (dia ${due.dueDate.getDate()})`;
 
                               return (
                                 <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${i.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70'}`} style={{ animationDelay: `${idx * 100}ms` }}>
@@ -1783,7 +2972,7 @@
                                   
                                   {i.active && isPaidThisMonth && (
                                     <div className="mb-4 px-3 py-2 rounded-xl text-xs font-bold bg-emerald-50 dark:bg-emerald-900/20 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                                      ✓ Paga este mês
+                                      ✓ Paga no ciclo atual
                                     </div>
                                   )}
                                   {i.active && !isPaidThisMonth && (
@@ -1812,8 +3001,8 @@
                                       <p className="font-black text-sm">{formatMoney(i.installmentValue)}</p>
                                     </div>
                                     <div className="p-2 rounded-lg bg-slate-100/50 dark:bg-slate-800/50">
-                                      <p className="text-[9px] text-slate-500 uppercase font-bold">Total</p>
-                                      <p className="font-black text-sm">{formatMoney(parseFloat(i.installmentValue) * tot)}</p>
+                                      <p className="text-[9px] text-slate-500 uppercase font-bold">Ciclo</p>
+                                      <p className="font-black text-sm">{i.interval || 1}m</p>
                                     </div>
                                   </div>
                                   
@@ -1881,6 +3070,7 @@
                       <div className="absolute right-0 bottom-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
                       <h3 className="font-extrabold text-xl mb-6 relative z-10">{goalForm.id ? 'Editar Meta' : 'Nova Meta Financeira'}</h3>
                       <p className="text-sm text-slate-500 mb-4 relative z-10">💡 Defina o objetivo e valor alvo. Use o botão "+ Aporte" para registrar valores ao longo do tempo.</p>
+                      
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-end relative z-10">
                         <div>
                           <label className={labelClass}>Objetivo (Ex: Viagem)</label>
@@ -1941,6 +3131,7 @@
                                 </div>
                               )}
                             </div>
+                            
                             <div>
                               <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
                                 <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isComplete ? 'bg-gradient-to-r from-emerald-400 to-emerald-600 shadow-[0_0_10px_rgba(16,185,129,0.5)]' : 'bg-gradient-to-r from-brand-400 to-brand-600 shadow-[0_0_10px_rgba(20,184,166,0.5)]'}`} style={{ width: `${pct}%` }}></div>
@@ -1971,6 +3162,7 @@
                     <form onSubmit={handleSetBudget} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
                       <div className="absolute right-0 top-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
                       <h3 className="font-extrabold text-xl mb-6 relative z-10">Orçamentos Mensais Rigorosos</h3>
+                      
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end relative z-10">
                         <div>
                           <label className={labelClass}>Categoria Alvo</label>
@@ -1993,6 +3185,7 @@
                         const pct = Math.min(100, (spent / limit) * 100); 
                         const isOver = spent > limit;
                         const remaining = limit - spent;
+                        
                         return (
                           <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
                             <div>
@@ -2000,7 +3193,10 @@
                                 <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{cat}</h3>
                                 <button type="button" onClick={()=>handleDeleteBudget(cat)} className="p-2.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-900/30 rounded-xl transition-colors" aria-label={`Remover orçamento de ${cat}`}>🗑️</button>
                               </div>
-                              <p className="text-sm font-medium mb-4 text-slate-600 dark:text-slate-300">Consumido: <span className={`font-black text-xl drop-shadow-sm ${isOver?'text-rose-500':''}`}>{formatMoney(spent)}</span> de {formatMoney(limit)}</p>
+                              <p className="text-sm font-medium mb-4 text-slate-600 dark:text-slate-300">
+                                Consumido: <span className={`font-black text-xl drop-shadow-sm ${isOver ? 'text-rose-500' : ''}`}>{formatMoney(spent)}</span> de {formatMoney(limit)}
+                              </p>
+                              
                               {!isOver && (
                                 <div className="p-3 rounded-xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50">
                                   <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Disponível</p>
@@ -2012,7 +3208,9 @@
                               <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
                                 <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isOver ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-brand-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]'}`} style={{ width: `${pct}%` }}></div>
                               </div>
-                              <div className={`text-right text-[10px] font-black tracking-widest ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>{pct.toFixed(1)}% {isOver ? 'ESTOURADO' : 'UTILIZADO'}</div>
+                              <div className={`text-right text-[10px] font-black tracking-widest ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>
+                                {pct.toFixed(1)}% {isOver ? 'ESTOURADO' : 'UTILIZADO'}
+                              </div>
                               {isOver && <div className="mt-2 text-rose-500 text-xs font-bold flex items-center gap-1">⚠️ Limite ultrapassado em {formatMoney(Math.abs(remaining))}!</div>}
                             </div>
                           </div>
@@ -2025,6 +3223,7 @@
                 {/* ===== ABA CONFIGURAÇÕES (SYNC) ===== */}
                 {activeTab === 'sync' && (
                   <div className="space-y-6 animate-slide-up max-w-4xl mx-auto">
+                    
                     {/* Perfil */}
                     <BentoCard title="Seu Perfil" icon="👤">
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -2164,31 +3363,43 @@
                           </div>
                         </div>
                         <div className="mt-6 flex justify-end">
-                          <button onClick={handleUpdateCoupleSettings} className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/30 hover:-translate-y-0.5 transition-all">Salvar Configurações</button>
+                          <button onClick={handleUpdateCoupleSettings} className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-lg shadow-brand-500/30 hover:-translate-y-0.5 transition-all">
+                            Salvar Configurações
+                          </button>
                         </div>
                       </BentoCard>
                     )}
                     
-                    {/* Ações */}
+                    {/* Ações Finais */}
                     <BentoCard title="Ações" icon="🔧">
                       <div className="flex flex-col md:flex-row gap-4">
-                        <button onClick={async () => { 
-                          await refreshUserData(); 
-                          const ownerId = isCouple && userData.coupleId ? userData.coupleId : user.uid;
-                          const [txs, gls, subs, insts, bdg] = await Promise.all([
-                            DataService.getAllTransactions(user.uid, userData?.coupleId),
-                            DataService.getCollection('goals', user.uid, userData?.coupleId),
-                            DataService.getCollection('subscriptions', user.uid, userData?.coupleId),
-                            DataService.getCollection('installments', user.uid, userData?.coupleId),
-                            DataService.getBudgets(ownerId)
-                          ]);
-                          setTransactions(txs); setGoals(gls); setSubscriptions(subs); setInstallments(insts); setBudgets(bdg);
-                          await loadAllContributions(gls);
-                          showToast('Dados atualizados!'); 
-                        }} className="flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3 px-8 rounded-xl shadow-xl hover:-translate-y-0.5 transition-all">
+                        <button 
+                          onClick={async () => { 
+                            await refreshUserData(); 
+                            const ownerId = isCouple && userData.coupleId ? userData.coupleId : user.uid;
+                            const [txs, gls, subs, insts, bdg] = await Promise.all([
+                              DataService.getAllTransactions(user.uid, userData?.coupleId),
+                              DataService.getCollection('goals', user.uid, userData?.coupleId),
+                              DataService.getCollection('subscriptions', user.uid, userData?.coupleId),
+                              DataService.getCollection('installments', user.uid, userData?.coupleId),
+                              DataService.getBudgets(ownerId)
+                            ]);
+                            setTransactions(txs); 
+                            setGoals(gls); 
+                            setSubscriptions(subs); 
+                            setInstallments(insts); 
+                            setBudgets(bdg);
+                            await loadAllContributions(gls);
+                            showToast('Dados atualizados!'); 
+                          }} 
+                          className="flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3 px-8 rounded-xl shadow-xl hover:-translate-y-0.5 transition-all"
+                        >
                           🔄 Atualizar Dados
                         </button>
-                        <button onClick={signOut} className="flex-1 md:hidden bg-rose-500 text-white font-bold py-3 px-8 rounded-xl shadow-md shadow-rose-500/30 hover:-translate-y-0.5 transition-all">
+                        <button 
+                          onClick={signOut} 
+                          className="flex-1 md:hidden bg-rose-500 text-white font-bold py-3 px-8 rounded-xl shadow-md shadow-rose-500/30 hover:-translate-y-0.5 transition-all"
+                        >
                           🚪 Sair da Conta
                         </button>
                       </div>
@@ -2199,7 +3410,7 @@
             </div>
           </main>
           
-          {/* TOASTS */}
+          {/* TOASTS (Notificações) */}
           <div className="fixed bottom-24 md:bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none" aria-live="polite">
             {toasts.map(t => (
               <div key={t.id} className={`px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-l-4 animate-slide-up max-w-sm ${t.isError ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-brand-500 text-brand-600 dark:text-brand-400'}`}>
@@ -2214,7 +3425,7 @@
             ))}
           </div>
           
-          {/* MODALS */}
+          {/* MODALS RENDERIZADOS */}
           {showMigrateModal && <MigrateModal onClose={() => setShowMigrateModal(false)} onSuccess={refreshUserData} />}
           
           {showInviteCodeModal && (
@@ -2236,29 +3447,42 @@
           )}
           
           {selectedGoalForContributions && (
-            <GoalContributionsModal goal={selectedGoalForContributions} onClose={() => setSelectedGoalForContributions(null)} onContributionsChange={async () => { const newGoals = await DataService.getCollection('goals', user.uid, userData?.coupleId); setGoals(newGoals); await loadAllContributions(newGoals); }} />
+            <GoalContributionsModal 
+              goal={selectedGoalForContributions} 
+              onClose={() => setSelectedGoalForContributions(null)} 
+              onContributionsChange={async () => { 
+                const newGoals = await DataService.getCollection('goals', user.uid, userData?.coupleId); 
+                setGoals(newGoals); 
+                await loadAllContributions(newGoals); 
+              }} 
+            />
           )}
         </div>
       );
     }
 
-    // ==================== APP ROOT ====================
+    // ==================== APP ROOT E RENDERIZAÇÃO ====================
     function App() {
       const { user, userData, loading } = useAuth();
-      if (loading) return (
-        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900">
-          <div className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-brand-500/30 animate-pulse">D</div>
-            <p className="text-white font-bold">Carregando Finanças DMX...</p>
+      
+      if (loading) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-brand-500/30 animate-pulse">D</div>
+              <p className="text-white font-bold animate-pulse">Carregando Finanças DMX...</p>
+            </div>
           </div>
-        </div>
-      );
+        );
+      }
+      
       if (!user) return <AuthScreen />;
       if (!userData?.mode) return <OnboardingFlow />;
+      
       return <DashboardApp />;
     }
 
-    // ==================== RENDER ====================
+    // Inicializa o React
     const rootElement = document.getElementById('root');
     ReactDOM.createRoot(rootElement).render(
       <AuthProvider>
