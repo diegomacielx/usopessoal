@@ -1366,9 +1366,9 @@
         const val = parseFloat(txForm.value);
         if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
         if (Object.keys(errors).length) { setFormErrors(p => ({...p, tx: errors})); return; }
-        
-        const payload = { 
-          ...txForm, 
+        const { id, ...txFormData } = txForm;
+        const payload = {
+          ...txFormData,
           ownerId: user.uid, 
           coupleId: txForm.scope === 'shared' ? userData.coupleId : null, 
           category: txForm.customCategory.trim() || txForm.category, 
@@ -1416,14 +1416,14 @@
         if (isNaN(target) || target <= 0) errors.target = 'Valor inválido';
         if (Object.keys(errors).length) { setFormErrors(p => ({...p, goal: errors})); return; }
         
-        const payload = { 
-          ownerId: user.uid, 
-          coupleId: userData.coupleId, 
-          scope: isCouple ? 'shared' : 'private', 
-          name: goalForm.name, 
-          target 
+        const { id, ...goalFormData } = goalForm;
+        const payload = {
+          ownerId: user.uid,
+          coupleId: userData.coupleId,
+          scope: isCouple ? 'shared' : 'private',
+          name: goalFormData.name,
+          target: goalFormData.target
         };
-        
         try {
           if (goalForm.id) {
             await DataService.updateGoal(goalForm.id, payload);
@@ -1472,14 +1472,15 @@
         if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
         if (Object.keys(errors).length) { setFormErrors(p => ({...p, sub: errors})); return; }
         
-        const payload = { 
-          ...subForm, 
-          ownerId: user.uid, 
-          coupleId: subForm.scope === 'shared' ? userData.coupleId : null, 
-          value: val, 
-          dayOfMonth: parseInt(subForm.dayOfMonth), 
-          active: true, 
-          category: subForm.category 
+        const { id, ...subFormData } = subForm;
+        const payload = {
+          ...subFormData,
+          ownerId: user.uid,
+          coupleId: subForm.scope === 'shared' ? userData.coupleId : null,
+          value: val,
+          dayOfMonth: parseInt(subForm.dayOfMonth),
+          active: true,
+          category: subForm.category
         };
         
         try {
@@ -1557,16 +1558,17 @@
         if (Object.keys(errors).length) { setFormErrors(p => ({...p, inst: errors})); return; }
         
         const paid = parseInt(instForm.paidInstallments) || 0;
-        const payload = { 
-          ...instForm, 
-          ownerId: user.uid, 
-          coupleId: instForm.scope === 'shared' ? userData.coupleId : null, 
-          installmentValue: val, 
-          totalInstallments: tot, 
-          paidInstallments: paid, 
-          dayOfMonth: parseInt(instForm.dayOfMonth), 
-          active: paid < tot, 
-          category: instForm.category 
+        const { id, ...instFormData } = instForm;
+        const payload = {
+          ...instFormData,
+          ownerId: user.uid,
+          coupleId: instForm.scope === 'shared' ? userData.coupleId : null,
+          installmentValue: val,
+          totalInstallments: tot,
+          paidInstallments: paid,
+          dayOfMonth: parseInt(instForm.dayOfMonth),
+          active: paid < tot,
+          category: instForm.category
         };
         
         try {
