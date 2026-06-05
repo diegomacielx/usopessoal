@@ -1209,29 +1209,76 @@
     
 // ==================== LEITOR DE QR CODE (NFC-e) ====================
     const NFCeScanner = ({ onScanSuccess, onCancel }) => {
-      useEffect(() => {
-        const html5QrcodeScanner = new Html5QrcodeScanner(
-          "qr-reader",
-          { fps: 10, qrbox: { width: 250, height: 250 } },
-          false
-        );
-        html5QrcodeScanner.render((decodedText) => {
-          html5QrcodeScanner.clear();
-          onScanSuccess(decodedText);
-        }, (error) => {
-          // Ignora erros de frame vazio enquanto procura o QR Code
-        });
+      const [errorMsg, setErrorMsg] = useState("");
 
-        return () => { html5QrcodeScanner.clear().catch(e => console.error(e)); };
+      useEffect(() => {
+        // Utilizamos a classe base headless, sem a UI injetada da biblioteca
+        const html5QrCode = new Html5Qrcode("qr-reader");
+
+        const startScanner = async () => {
+          try {
+            await html5QrCode.start(
+              { facingMode: "environment" }, // Força a câmera traseira automaticamente
+              {
+                fps: 10,
+                qrbox: { width: 250, height: 250 },
+                aspectRatio: 1.0 // Mantém a câmera quadrada
+              },
+              (decodedText) => {
+                // Ao ler com sucesso, para a câmera e devolve o texto
+                html5QrCode.stop().then(() => {
+                  onScanSuccess(decodedText);
+                }).catch(console.error);
+              },
+              (errorMessage) => {
+                // Falhas silenciosas de frame (ignoramos para não poluir o console)
+              }
+            );
+          } catch (err) {
+            setErrorMsg("Não foi possível iniciar a câmera. Verifique as permissões do seu navegador.");
+            console.error(err);
+          }
+        };
+
+        startScanner();
+
+        // Cleanup: Desliga a câmera se o usuário fechar o modal antes de ler
+        return () => {
+          if (html5QrCode.isScanning) {
+            html5QrCode.stop().catch(console.error);
+          }
+        };
       }, [onScanSuccess]);
 
       return (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 animate-fade-in">
-          <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl w-full max-w-md shadow-2xl relative animate-slide-up border border-slate-200 dark:border-slate-800">
-            <h3 className="font-extrabold text-xl mb-4 text-center text-slate-800 dark:text-white">📸 Escanear Nota Fiscal</h3>
-            <p className="text-xs text-slate-500 text-center mb-4">Aponte a câmera para o QR Code da NFC-e</p>
-            <div id="qr-reader" className="w-full overflow-hidden rounded-2xl border-2 border-brand-500/50 mb-4 bg-black/5"></div>
-            <button onClick={onCancel} className="w-full py-3 bg-rose-500 hover:bg-rose-600 text-white font-bold rounded-xl shadow-lg transition-all">Cancelar</button>
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-md p-4 animate-fade-in">
+          <div className="bg-slate-900 p-6 md:p-8 rounded-3xl w-full max-w-sm shadow-2xl relative animate-slide-up border border-slate-700">
+            
+            <div className="text-center mb-6">
+              <h3 className="font-extrabold text-xl text-white mb-1">📸 Escanear NFC-e</h3>
+              <p className="text-xs text-slate-400 font-medium">Aponte a câmera traseira para o QR Code</p>
+            </div>
+            
+            {errorMsg ? (
+              <div className="p-4 bg-rose-900/30 border border-rose-800 text-rose-400 rounded-xl text-center text-sm font-bold mb-6">
+                ⚠️ {errorMsg}
+              </div>
+            ) : (
+              <div className="relative w-full aspect-square rounded-2xl overflow-hidden mb-6 bg-black shadow-[0_0_30px_rgba(20,184,166,0.15)] border-2 border-brand-500/30">
+                {/* O vídeo da câmera será injetado exclusivamente aqui, sem botões de upload */}
+                <div id="qr-reader" className="w-full h-full object-cover"></div>
+                
+                {/* Mira visual para auxiliar o usuário */}
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-3/4 h-3/4 border-[3px] border-brand-500/80 rounded-3xl"></div>
+                  <div className="absolute w-full h-[2px] bg-brand-500/50 animate-pulse top-1/2 shadow-[0_0_10px_rgba(20,184,166,0.8)]"></div>
+                </div>
+              </div>
+            )}
+            
+            <button onClick={onCancel} className="w-full py-4 bg-slate-800 hover:bg-rose-600 text-slate-300 hover:text-white font-bold rounded-xl shadow-lg transition-all border border-slate-700 hover:border-rose-500 uppercase tracking-widest text-xs">
+              Cancelar e Voltar
+            </button>
           </div>
         </div>
       );
