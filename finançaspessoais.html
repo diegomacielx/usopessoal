@@ -1597,7 +1597,9 @@
         if (!window.confirm(`Marcar parcela ${parseInt(inst.paidInstallments) + 1}/${inst.totalInstallments} de "${inst.desc}" como paga?`)) return;
         try {
           const today = new Date();
+          const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
           const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          
           await DataService.addTransaction({
             desc: `${inst.desc} (${parseInt(inst.paidInstallments) + 1}/${inst.totalInstallments})`,
             value: parseFloat(inst.installmentValue),
@@ -1611,8 +1613,14 @@
             autoType: 'installment_payment',
             installmentId: inst.id,
           });
+          
           const newPaid = parseInt(inst.paidInstallments) + 1;
-          await DataService.updateInstallment(inst.id, { paidInstallments: newPaid, active: newPaid < parseInt(inst.totalInstallments) });
+          await DataService.updateInstallment(inst.id, { 
+            paidInstallments: newPaid, 
+            active: newPaid < parseInt(inst.totalInstallments),
+            lastPaidMonth: currentMonth // Adicionado para silenciar o alerta no mês atual
+          });
+          
           setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId));
           setInstallments(await DataService.getCollection('installments', user.uid, userData.coupleId));
           showToast("Parcela paga!");
