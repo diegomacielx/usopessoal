@@ -1298,36 +1298,57 @@
       const [isScanning, setIsScanning] = useState(false);
 
       const handleScanSuccess = useCallback((decodedText) => {
+        // Desliga a câmera assim que ler algo
         setIsScanning(false);
+        
         try {
           let value = "";
-          let desc = "Compras (NFC-e)";
-          
-          // Lógica de parser do Padrão Nacional NFC-e
-          // O valor costuma ser o 5º parâmetro separado por '|'
-          const params = decodedText.split('|');
-          if (params.length >= 5) {
-            const possibleValue = parseFloat(params[4]);
-            if (!isNaN(possibleValue) && possibleValue > 0) value = String(possibleValue);
-          } else if (decodedText.includes('vNF=')) {
-            // Variação usada por algumas SEFAZ
-            const match = decodedText.match(/vNF=([\d.]+)/);
-            if (match && match[1]) value = String(parseFloat(match[1]));
+          let desc = "Nova Despesa";
+          let category = "Outros";
+
+          // 1. TENTAR LER PADRÃO PIX (Contas de água, luz, transferências)
+          // O QR Code do PIX sempre começa com '000201' ou contém 'br.gov.bcb.pix'
+          if (decodedText.startsWith('000201') || decodedText.includes('br.gov.bcb.pix')) {
+            desc = "Pagamento de Conta (PIX)";
+            category = "Habitação"; // Conta de água geralmente entra aqui
+            
+            // No padrão EMV PIX, o valor fica na Tag 54. Ex: 540550.00 (Tag 54, tamanho 05, valor 50.00)
+            const pixMatch = decodedText.match(/54\d{2}([\d.]+)/);
+            if (pixMatch && pixMatch[1]) {
+              value = String(parseFloat(pixMatch[1]));
+            }
+          } 
+          // 2. TENTAR LER PADRÃO NFC-e (Supermercados, Farmácias)
+          else if (decodedText.includes('|') || decodedText.includes('sefaz')) {
+            desc = "Compras (NFC-e)";
+            category = "Casa/Mercado";
+            
+            const params = decodedText.split('|');
+            if (params.length >= 5) {
+              const possibleValue = parseFloat(params[4]);
+              if (!isNaN(possibleValue) && possibleValue > 0) value = String(possibleValue);
+            } else if (decodedText.includes('vNF=')) {
+              const match = decodedText.match(/vNF=([\d.]+)/);
+              if (match && match[1]) value = String(parseFloat(match[1]));
+            }
           }
 
+          // Atualiza o formulário com o que a IA nativa descobriu
           setTxForm(prev => ({
             ...prev,
             desc: desc,
             value: value,
-            category: 'Casa/Mercado',
+            category: category,
             type: 'expense'
           }));
           
+          // Alerta o usuário dependendo do resultado
           if (value) {
-            showToast("Nota lida com sucesso! Valor extraído automaticamente.", false, `R$ ${value}`);
+            showToast("QR Code processado com sucesso!", false, `Valor extraído: R$ ${value}`);
           } else {
-            showToast("QR Code lido com sucesso, mas insira o valor manualmente.", false, "Formato regional não detectou o valor.");
+            showToast("QR Code lido, mas sem valor.", true, "Insira o valor manualmente.");
           }
+          
         } catch (e) {
           showToast("Erro ao processar os dados do QR Code.", true);
         }
