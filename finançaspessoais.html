@@ -1214,30 +1214,35 @@
       useEffect(() => {
         const html5QrCode = new Html5Qrcode("qr-reader");
 
+        // Função oficial para calcular um qrbox quadrado e responsivo no celular
+        const qrboxFunction = (viewfinderWidth, viewfinderHeight) => {
+          const minEdge = Math.min(viewfinderWidth, viewfinderHeight);
+          const qrboxSize = Math.floor(minEdge * 0.7); // Usa 70% da menor borda da tela
+          return {
+            width: qrboxSize,
+            height: qrboxSize
+          };
+        };
+
         const startScanner = async () => {
           try {
             await html5QrCode.start(
-              // 1. Tenta forçar o foco automático contínuo na câmera nativa
-              { facingMode: "environment", advanced: [{ focusMode: "continuous" }] },
+              { facingMode: "environment" }, // Abre a câmera traseira nativa
               {
                 fps: 15,
-                // 2. O Segredo: Retornar o qrbox. Isso cria a "janela de foco".
-                // Sem ela, o algoritmo tenta ler a tela inteira e falha no PIX que é muito denso.
-                qrbox: { width: 280, height: 280 } 
+                qrbox: qrboxFunction // Aplica o cálculo de tamanho correto
               },
               (decodedText) => {
-                // Sucesso!
                 html5QrCode.stop().then(() => {
                   onScanSuccess(decodedText);
                 }).catch(console.error);
               },
               (errorMessage) => {
-                // Erros contínuos de frame vazio (ignoramos silenciosamente)
+                // Frames vazios (ignora)
               }
             );
             
-            // 3. Truque cirúrgico de CSS para forçar a lente a não esticar,
-            // aplicando object-fit direto na tag de vídeo que a biblioteca cria.
+            // Ajusta o vídeo para preencher o contêiner perfeitamente sem distorção
             setTimeout(() => {
               const video = document.querySelector("#qr-reader video");
               if (video) {
@@ -1248,7 +1253,7 @@
             }, 500);
 
           } catch (err) {
-            setErrorMsg("Erro ao iniciar a câmera. Tente recarregar a página.");
+            setErrorMsg("Não foi possível acessar a câmera traseira. Certifique-se de dar permissão de acesso.");
             console.error(err);
           }
         };
@@ -1268,7 +1273,7 @@
             
             <div className="text-center mb-6">
               <h3 className="font-extrabold text-xl text-white mb-2">📸 Escanear Código</h3>
-              <p className="text-xs text-slate-400 font-medium">Posicione o PIX ou NFC-e na área clara</p>
+              <p className="text-xs text-slate-400 font-medium">Posicione o PIX ou NFC-e no quadrado central</p>
             </div>
             
             {errorMsg ? (
@@ -1276,7 +1281,6 @@
                 ⚠️ {errorMsg}
               </div>
             ) : (
-              // A div do leitor
               <div className="relative w-full aspect-square rounded-3xl overflow-hidden mb-8 bg-black shadow-[0_0_40px_rgba(20,184,166,0.15)] border-2 border-brand-500/50">
                 <div id="qr-reader" className="w-full h-full"></div>
               </div>
