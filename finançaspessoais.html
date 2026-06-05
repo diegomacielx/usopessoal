@@ -1,0 +1,1918 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+  <title>Finanças DMX</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: { sans: ['"Plus Jakarta Sans"', 'sans-serif'] },
+          colors: {
+            brand: { 50: '#f0fdfa', 100: '#ccfbf1', 400: '#2dd4bf', 500: '#14b8a6', 600: '#0d9488', 900: '#134e4a', 950: '#042f2e' },
+            partner: { 50: '#f5f3ff', 100: '#ede9fe', 400: '#a78bfa', 500: '#8b5cf6', 600: '#7c3aed', 900: '#4c1d95' }
+          },
+          animation: {
+            'blob': 'blob 20s infinite',
+            'fade-in': 'fadeIn 0.5s ease-out forwards',
+            'slide-up': 'slideUp 0.5s ease-out forwards',
+          },
+          keyframes: {
+            blob: {
+              '0%, 100%': { transform: 'translate(0px, 0px) scale(1)' },
+              '33%': { transform: 'translate(40px, -60px) scale(1.15)' },
+              '66%': { transform: 'translate(-30px, 30px) scale(0.9)' },
+            },
+            fadeIn: { '0%': { opacity: '0' }, '100%': { opacity: '1' } },
+            slideUp: { '0%': { opacity: '0', transform: 'translateY(20px)' }, '100%': { opacity: '1', transform: 'translateY(0)' } }
+          }
+        },
+      },
+    }
+  </script>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <!-- Firebase SDKs (versão compat para funcionar com Babel standalone) -->
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-firestore-compat.js"></script>
+
+  <script>
+    // === CONFIGURAÇÃO DO FIREBASE (SUAS CREDENCIAIS) ===
+    const firebaseConfig = {
+      apiKey: "AIzaSyAlH98iLdFcizTtV6OpA0k64kyA5Ap-tbE",
+      authDomain: "financas-dmx.firebaseapp.com",
+      projectId: "financas-dmx",
+      storageBucket: "financas-dmx.firebasestorage.app",
+      messagingSenderId: "521024102499",
+      appId: "1:521024102499:web:22261ba97d5dddc1eb9856"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+  </script>
+
+  <style>
+    body { font-family: 'Plus Jakarta Sans', sans-serif; -webkit-font-smoothing: antialiased; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background-color: rgba(148, 163, 184, 0.3); border-radius: 10px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb:hover { background-color: rgba(148, 163, 184, 0.5); }
+    
+    .glass-card { 
+      background: rgba(255, 255, 255, 0.65); 
+      backdrop-filter: blur(20px); 
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.6); 
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.05);
+    }
+    .dark .glass-card { 
+      background: rgba(15, 23, 42, 0.6); 
+      border: 1px solid rgba(255, 255, 255, 0.08); 
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+
+    .field-error { border-color: #f43f5e !important; background-color: rgba(244, 63, 94, 0.05) !important; }
+    .error-message { color: #f43f5e; font-size: 0.75rem; margin-top: 4px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    
+    .donut-segment { transition: stroke-dashoffset 1s cubic-bezier(0.4, 0, 0.2, 1), stroke-width 0.3s; }
+    .donut-segment:hover { stroke-width: 14; filter: drop-shadow(0 0 6px currentColor); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 dark:bg-[#050914] dark:text-slate-100 min-h-screen transition-colors duration-500">
+  
+  <div class="fixed inset-0 -z-10 overflow-hidden pointer-events-none">
+    <div class="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-400/20 dark:bg-brand-500/10 rounded-full blur-[120px] animate-blob"></div>
+    <div class="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-400/20 dark:bg-partner-500/10 rounded-full blur-[120px] animate-blob" style="animation-delay: 5s"></div>
+    <div class="absolute top-[40%] left-[40%] w-[30%] h-[30%] bg-blue-400/10 dark:bg-blue-500/5 rounded-full blur-[100px] animate-blob" style="animation-delay: 10s"></div>
+  </div>
+
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState, useEffect, useMemo, useCallback, useContext, createContext, memo } = React;
+
+    // ==================== UTILITÁRIOS ====================
+    const getLocalDateString = () => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    };
+    const formatMoney = (val) => Number(val).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    
+    const generateId = () => {
+      if (window.crypto?.randomUUID) return crypto.randomUUID();
+      return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+        const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+        return v.toString(16);
+      });
+    };
+
+    // Gera código de convite de 6 dígitos (fácil de digitar)
+    const generateInviteCode = () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Sem I, O, 0, 1 para evitar confusão
+      let code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+      }
+      return code;
+    };
+
+    const predefinedCategories = ['Alimentação', 'Transporte', 'Lazer', 'Saúde', 'Habitação', 'Educação', 'Vestuário', 'Pets', 'Assinaturas', 'Dívidas', 'Investimentos', 'Cuidados Pessoais', 'Casa/Mercado', 'Viagem', 'Outros'];
+
+    // ==================== DATA SERVICE (Abstrai Firestore) ====================
+    const DataService = {
+      // Auth
+      signUp: async (email, password, name) => {
+        const userCredential = await auth.createUserWithEmailAndPassword(email, password);
+        const user = userCredential.user;
+        
+        await db.collection('users').doc(user.uid).set({
+          email,
+          name,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          mode: null, // Será definido no onboarding
+          coupleId: null,
+          partnerId: null,
+          settings: { salary: 0, currency: 'BRL', nameInCouple: 'Pessoa A' }
+        });
+        
+        return user;
+      },
+      
+      signIn: async (email, password) => {
+        const userCredential = await auth.signInWithEmailAndPassword(email, password);
+        return userCredential.user;
+      },
+      
+      signOut: async () => await auth.signOut(),
+      
+      sendPasswordReset: async (email) => {
+        await auth.sendPasswordResetEmail(email);
+      },
+      
+      getUserData: async (userId) => {
+        const doc = await db.collection('users').doc(userId).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+      },
+      
+      updateUser: async (userId, updates) => {
+        await db.collection('users').doc(userId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      // Casal: criar e gerar código de convite
+      createCoupleAndInvite: async (currentUser, partnerEmail, nameInCouple) => {
+        // Verifica se parceiro existe
+        const partnerQuery = await db.collection('users').where('email', '==', partnerEmail).limit(1).get();
+        
+        if (partnerQuery.empty) {
+          throw new Error('Este email não está cadastrado. Peça para seu parceiro criar uma conta primeiro e depois digite o código.');
+        }
+        
+        const partnerData = partnerQuery.docs[0].data();
+        const partnerId = partnerQuery.docs[0].id;
+        
+        if (partnerData.mode === 'couple') {
+          throw new Error('Este usuário já está em um casal.');
+        }
+        
+        // Cria documento do casal com código de convite
+        const inviteCode = generateInviteCode();
+        const coupleRef = await db.collection('couples').add({
+          userA: currentUser.uid,
+          userB: partnerId,
+          inviteCode,
+          inviteEmail: partnerEmail,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          acceptedAt: null,
+          settings: {
+            nameA: nameInCouple,
+            nameB: partnerData.name || 'Pessoa B',
+            salaryA: 0, salaryB: 0,
+          }
+        });
+        
+        // Atualiza usuário atual
+        await db.collection('users').doc(currentUser.uid).update({
+          mode: 'couple',
+          coupleId: coupleRef.id,
+          partnerId: partnerId,
+          'settings.nameInCouple': nameInCouple,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { coupleId: coupleRef.id, partnerId, inviteCode };
+      },
+      
+      // Casal: aceitar convite via código
+      acceptInviteByCode: async (currentUser, inviteCode) => {
+        // Busca casal pelo código
+        const coupleQuery = await db.collection('couples')
+          .where('inviteCode', '==', inviteCode.toUpperCase())
+          .where('acceptedAt', '==', null)
+          .limit(1)
+          .get();
+        
+        if (coupleQuery.empty) {
+          throw new Error('Código inválido ou já utilizado.');
+        }
+        
+        const coupleDoc = coupleQuery.docs[0];
+        const coupleData = coupleDoc.data();
+        
+        // Verifica se o usuário é o convidado
+        if (coupleData.userB !== currentUser.uid) {
+          throw new Error('Este código não foi enviado para você.');
+        }
+        
+        // Atualiza casal como aceito
+        await db.collection('couples').doc(coupleDoc.id).update({
+          acceptedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        // Atualiza usuário atual
+        await db.collection('users').doc(currentUser.uid).update({
+          mode: 'couple',
+          coupleId: coupleDoc.id,
+          partnerId: coupleData.userA,
+          'settings.nameInCouple': 'Pessoa B',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+        
+        return { coupleId: coupleDoc.id, partnerId: coupleData.userA };
+      },
+      
+      getCoupleData: async (coupleId) => {
+        if (!coupleId) return null;
+        const doc = await db.collection('couples').doc(coupleId).get();
+        return doc.exists ? { id: doc.id, ...doc.data() } : null;
+      },
+      
+      updateCouple: async (coupleId, updates) => {
+        await db.collection('couples').doc(coupleId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      // Transações
+      subscribeTransactions: (userId, coupleId, callback) => {
+        // Escuta mudanças em tempo real
+        const queries = [];
+        
+        // Transações pessoais
+        queries.push(
+          db.collection('transactions')
+            .where('ownerId', '==', userId)
+            .where('scope', '==', 'private')
+            .orderBy('date', 'desc')
+        );
+        
+        // Transações compartilhadas (se em modo casal)
+        if (coupleId) {
+          queries.push(
+            db.collection('transactions')
+              .where('coupleId', '==', coupleId)
+              .where('scope', '==', 'shared')
+              .orderBy('date', 'desc')
+          );
+        }
+        
+        const unsubscribes = queries.map(query => 
+          query.onSnapshot(snapshot => {
+            // Rebusca todas as transações a cada mudança
+            fetchAllTransactions(userId, coupleId).then(callback);
+          })
+        );
+        
+        return () => unsubscribes.forEach(unsub => unsub());
+      },
+      
+      addTransaction: async (txData) => {
+        await db.collection('transactions').add({
+          ...txData,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      updateTransaction: async (txId, updates) => {
+        await db.collection('transactions').doc(txId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      deleteTransaction: async (txId) => {
+        await db.collection('transactions').doc(txId).delete();
+      },
+      
+      // Goals (mesma lógica)
+      addGoal: async (goalData) => {
+        await db.collection('goals').add({
+          ...goalData,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      updateGoal: async (goalId, updates) => {
+        await db.collection('goals').doc(goalId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      deleteGoal: async (goalId) => {
+        await db.collection('goals').doc(goalId).delete();
+      },
+      
+      // Subscriptions
+      addSubscription: async (subData) => {
+        await db.collection('subscriptions').add({
+          ...subData,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      updateSubscription: async (subId, updates) => {
+        await db.collection('subscriptions').doc(subId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      deleteSubscription: async (subId) => {
+        await db.collection('subscriptions').doc(subId).delete();
+      },
+      
+      // Installments
+      addInstallment: async (instData) => {
+        await db.collection('installments').add({
+          ...instData,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      updateInstallment: async (instId, updates) => {
+        await db.collection('installments').doc(instId).update({
+          ...updates,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      deleteInstallment: async (instId) => {
+        await db.collection('installments').doc(instId).delete();
+      },
+      
+      // Budgets
+      setBudget: async (userId, coupleId, category, limit) => {
+        const budgetRef = db.collection('budgets').doc(`${coupleId || userId}_${category}`);
+        await budgetRef.set({
+          ownerId: coupleId || userId,
+          category,
+          limit,
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      },
+      
+      deleteBudget: async (userId, coupleId, category) => {
+        await db.collection('budgets').doc(`${coupleId || userId}_${category}`).delete();
+      },
+    };
+
+    // Função auxiliar para buscar todas as transações
+    async function fetchAllTransactions(userId, coupleId) {
+      const personalSnapshot = await db.collection('transactions')
+        .where('ownerId', '==', userId)
+        .orderBy('date', 'desc')
+        .get();
+      
+      let sharedSnapshot = { docs: [] };
+      if (coupleId) {
+        sharedSnapshot = await db.collection('transactions')
+          .where('coupleId', '==', coupleId)
+          .where('scope', '==', 'shared')
+          .orderBy('date', 'desc')
+          .get();
+      }
+      
+      const allDocs = [...personalSnapshot.docs, ...sharedSnapshot.docs];
+      const uniqueMap = new Map();
+      allDocs.forEach(doc => uniqueMap.set(doc.id, { id: doc.id, ...doc.data() }));
+      
+      return Array.from(uniqueMap.values()).sort((a, b) => 
+        new Date(b.date) - new Date(a.date)
+      );
+    }
+
+    // Função auxiliar para buscar coleções
+    async function fetchCollection(collectionName, userId, coupleId) {
+      const personalSnapshot = await db.collection(collectionName)
+        .where('ownerId', '==', userId)
+        .get();
+      
+      let sharedSnapshot = { docs: [] };
+      if (coupleId && collectionName !== 'budgets') {
+        sharedSnapshot = await db.collection(collectionName)
+          .where('coupleId', '==', coupleId)
+          .where('scope', '==', 'shared')
+          .get();
+      }
+      
+      const allDocs = [...personalSnapshot.docs, ...sharedSnapshot.docs];
+      const uniqueMap = new Map();
+      allDocs.forEach(doc => uniqueMap.set(doc.id, { id: doc.id, ...doc.data() }));
+      return Array.from(uniqueMap.values());
+    }
+
+    async function fetchBudgets(userId, coupleId) {
+      const ownerId = coupleId || userId;
+      const snapshot = await db.collection('budgets')
+        .where('ownerId', '==', ownerId)
+        .get();
+      
+      const budgets = {};
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        budgets[data.category] = data.limit;
+      });
+      return budgets;
+    }
+
+    // ==================== AUTH CONTEXT ====================
+    const AuthContext = createContext();
+
+    function AuthProvider({ children }) {
+      const [user, setUser] = useState(null);
+      const [userData, setUserData] = useState(null);
+      const [coupleData, setCoupleData] = useState(null);
+      const [loading, setLoading] = useState(true);
+      
+      useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged(async (firebaseUser) => {
+          if (firebaseUser) {
+            const data = await DataService.getUserData(firebaseUser.uid);
+            setUser(firebaseUser);
+            setUserData(data);
+            
+            if (data?.coupleId) {
+              const couple = await DataService.getCoupleData(data.coupleId);
+              setCoupleData(couple);
+            }
+          } else {
+            setUser(null);
+            setUserData(null);
+            setCoupleData(null);
+          }
+          setLoading(false);
+        });
+        return unsubscribe;
+      }, []);
+      
+      const refreshUserData = async () => {
+        if (user) {
+          const data = await DataService.getUserData(user.uid);
+          setUserData(data);
+          if (data?.coupleId) {
+            const couple = await DataService.getCoupleData(data.coupleId);
+            setCoupleData(couple);
+          } else {
+            setCoupleData(null);
+          }
+        }
+      };
+      
+      const value = { 
+        user, userData, coupleData, loading, 
+        signIn: DataService.signIn, 
+        signUp: DataService.signUp, 
+        signOut: DataService.signOut,
+        sendPasswordReset: DataService.sendPasswordReset,
+        refreshUserData
+      };
+      
+      return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+    }
+
+    function useAuth() {
+      const context = useContext(AuthContext);
+      if (!context) throw new Error('useAuth must be used within AuthProvider');
+      return context;
+    }
+
+    // ==================== COMPONENTES VISUAIS ====================
+    const BentoCard = ({ children, className = "", title, icon, action }) => (
+      <div className={`glass-card p-6 rounded-3xl transition-all duration-300 hover:shadow-2xl hover:-translate-y-1 ${className}`}>
+        {(title || action) && (
+          <div className="flex justify-between items-start mb-5">
+            {title && <h3 className="font-bold text-slate-500 dark:text-slate-400 text-[10px] uppercase tracking-[0.2em] flex items-center gap-2">{icon} {title}</h3>}
+            {action}
+          </div>
+        )}
+        {children}
+      </div>
+    );
+
+    const DonutChart = memo(({ categoriesTotal }) => {
+      if (Object.keys(categoriesTotal).length === 0) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Sem dados para exibir</div>;
+      const sorted = Object.entries(categoriesTotal).sort((a,b) => b[1].val - a[1].val);
+      const total = sorted.reduce((acc, curr) => acc + curr[1].val, 0);
+      const colors = ['#14b8a6', '#8b5cf6', '#3b82f6', '#f43f5e', '#f59e0b', '#10b981', '#64748b'];
+      
+      return (
+        <div className="flex flex-col md:flex-row items-center gap-8">
+          <div className="relative w-40 h-40 flex-shrink-0">
+            <svg viewBox="0 0 100 100" className="w-full h-full transform -rotate-90 drop-shadow-xl">
+              <circle cx="50" cy="50" r="40" fill="transparent" strokeWidth="10" className="stroke-slate-200 dark:stroke-slate-800" />
+              {sorted.map(([cat, data], i) => {
+                const pct = (data.val / total) * 100;
+                const offset = sorted.slice(0, i).reduce((acc, curr) => acc + (curr[1].val / total) * 100, 0);
+                return <circle key={cat} cx="50" cy="50" r="40" fill="transparent" strokeWidth="10" stroke={colors[i % colors.length]} strokeDasharray={`${(pct / 100) * 251.2} 251.2`} strokeDashoffset={-(offset / 100) * 251.2} className="donut-segment" strokeLinecap="round" />;
+              })}
+            </svg>
+            <div className="absolute inset-0 flex items-center justify-center flex-col">
+              <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Total</span>
+              <span className="text-sm font-black text-slate-800 dark:text-white">{formatMoney(total)}</span>
+            </div>
+          </div>
+          <div className="flex-1 space-y-3 w-full max-h-48 overflow-y-auto custom-scrollbar pr-2">
+            {sorted.map(([cat, data], i) => (
+              <div key={cat} className="flex justify-between items-center text-sm gap-3 group">
+                <div className="flex items-center gap-3 flex-1 min-w-0">
+                  <span className="w-3 h-3 rounded-full flex-shrink-0 shadow-sm" style={{backgroundColor: colors[i % colors.length]}}></span>
+                  <span className="font-semibold text-slate-700 dark:text-slate-200 truncate group-hover:text-brand-600 dark:group-hover:text-brand-400 transition-colors">{cat}</span>
+                </div>
+                <div className="text-right flex-shrink-0">
+                  <div className="font-bold text-slate-900 dark:text-white">{formatMoney(data.val)}</div>
+                  <div className="text-[10px] text-slate-500 font-medium">{((data.val / total) * 100).toFixed(1)}% &bull; {data.count}x</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    });
+
+    const EvolutionChart = memo(({ transactions, settings }) => {
+      const monthlyData = {};
+      transactions.forEach(t => {
+        let month = t.date.slice(0, 7);
+        if (!monthlyData[month]) monthlyData[month] = { inc: 0, exp: 0 };
+        t.type === 'income' ? monthlyData[month].inc += t.value : monthlyData[month].exp += t.value;
+      });
+      const sortedMonths = Object.keys(monthlyData).sort().slice(-6);
+      if(sortedMonths.length === 0) return <div className="flex items-center justify-center h-48 text-slate-400 text-sm">Histórico insuficiente</div>;
+      
+      let maxVal = 1;
+      const items = sortedMonths.map(m => {
+        const salaryTotal = (parseFloat(settings.salaryA || 0)) + (parseFloat(settings.salaryB || 0));
+        const i = (monthlyData[m].inc || 0) + salaryTotal;
+        const e = monthlyData[m].exp || 0;
+        if (i > maxVal) maxVal = i; if (e > maxVal) maxVal = e;
+        return { month: m.split('-').reverse().join('/'), inc: i, exp: e };
+      });
+      
+      return (
+        <div className="h-56 flex items-end justify-between gap-3 mt-4 px-2">
+          {items.map(item => (
+            <div key={item.month} className="flex flex-col items-center flex-1 group cursor-pointer">
+              <div className="flex items-end justify-center w-full h-44 gap-1 relative">
+                <div className="w-2/5 max-w-[24px] bg-gradient-to-t from-brand-600 to-brand-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" style={{ height: `${(item.inc / maxVal) * 100}%` }} title={`Receita: ${formatMoney(item.inc)}`}></div>
+                <div className="w-2/5 max-w-[24px] bg-gradient-to-t from-rose-600 to-rose-400 rounded-t-md opacity-80 transition-all duration-500 group-hover:opacity-100 group-hover:scale-105" style={{ height: `${(item.exp / maxVal) * 100}%` }} title={`Despesa: ${formatMoney(item.exp)}`}></div>
+              </div>
+              <span className="text-[11px] text-slate-500 mt-3 font-bold tracking-wide group-hover:text-brand-500 transition-colors">{item.month}</span>
+            </div>
+          ))}
+        </div>
+      );
+    });
+
+    // ==================== TELA DE AUTENTICAÇÃO ====================
+    function AuthScreen() {
+      const { signIn, signUp, sendPasswordReset } = useAuth();
+      const [mode, setMode] = useState('login'); // 'login' | 'signup' | 'reset'
+      const [form, setForm] = useState({ email: '', password: '', name: '' });
+      const [error, setError] = useState('');
+      const [success, setSuccess] = useState('');
+      const [loading, setLoading] = useState(false);
+      
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setSuccess('');
+        setLoading(true);
+        
+        try {
+          if (mode === 'signup') {
+            if (!form.name.trim()) throw new Error('Nome é obrigatório');
+            if (form.password.length < 6) throw new Error('Senha deve ter no mínimo 6 caracteres');
+            await signUp(form.email, form.password, form.name);
+            setSuccess('Conta criada! Bem-vindo ao Finanças DMX.');
+          } else if (mode === 'login') {
+            await signIn(form.email, form.password);
+          } else if (mode === 'reset') {
+            if (!form.email) throw new Error('Digite seu email');
+            await sendPasswordReset(form.email);
+            setSuccess('Email de recuperação enviado! Verifique sua caixa de entrada.');
+            setTimeout(() => setMode('login'), 3000);
+          }
+        } catch (err) {
+          let msg = err.message;
+          if (msg.includes('auth/email-already-in-use')) msg = 'Este email já está cadastrado.';
+          else if (msg.includes('auth/invalid-email')) msg = 'Email inválido.';
+          else if (msg.includes('auth/user-not-found') || msg.includes('auth/wrong-password')) msg = 'Email ou senha incorretos.';
+          else if (msg.includes('auth/weak-password')) msg = 'Senha muito fraca (mínimo 6 caracteres).';
+          else if (msg.includes('auth/too-many-requests')) msg = 'Muitas tentativas. Tente novamente em alguns minutos.';
+          setError(msg);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-4 relative overflow-hidden">
+          {/* Blobs de fundo */}
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-500/20 rounded-full blur-[120px] animate-blob"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-500/20 rounded-full blur-[120px] animate-blob" style={{animationDelay: '5s'}}></div>
+          
+          <div className="glass-card p-8 md:p-10 rounded-3xl w-full max-w-md shadow-2xl relative z-10 animate-fade-in">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-brand-500/30">D</div>
+              <h1 className="font-extrabold text-3xl bg-clip-text text-transparent bg-gradient-to-r from-brand-400 to-partner-400 tracking-tight">Finanças DMX</h1>
+              <p className="text-slate-500 dark:text-slate-400 text-sm mt-2">
+                {mode === 'login' && 'Entre para acessar suas finanças'}
+                {mode === 'signup' && 'Crie sua conta gratuita'}
+                {mode === 'reset' && 'Recupere sua senha'}
+              </p>
+            </div>
+            
+            {error && (
+              <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 rounded-xl text-sm font-medium flex items-start gap-2">
+                <span>⚠️</span> {error}
+              </div>
+            )}
+            
+            {success && (
+              <div className="mb-4 p-3 bg-emerald-100/50 dark:bg-emerald-900/30 border border-emerald-200 dark:border-emerald-800/50 text-emerald-700 dark:text-emerald-300 rounded-xl text-sm font-medium flex items-start gap-2">
+                <span>✅</span> {success}
+              </div>
+            )}
+            
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {mode === 'signup' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Nome</label>
+                  <input type="text" value={form.name} onChange={e => setForm({...form, name: e.target.value})} 
+                    className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300" 
+                    placeholder="Seu nome" required />
+                </div>
+              )}
+              
+              <div>
+                <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email</label>
+                <input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} 
+                  className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300" 
+                  placeholder="seu@email.com" required />
+              </div>
+              
+              {mode !== 'reset' && (
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Senha</label>
+                  <input type="password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} 
+                    className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300" 
+                    placeholder="••••••••" required minLength="6" />
+                </div>
+              )}
+              
+              <button type="submit" disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-0.5 disabled:translate-y-0">
+                {loading ? 'Processando...' : 
+                  mode === 'login' ? 'Entrar' : 
+                  mode === 'signup' ? 'Criar Conta Gratuita' : 'Enviar Email de Recuperação'}
+              </button>
+            </form>
+            
+            <div className="mt-6 space-y-2 text-center">
+              {mode === 'login' && (
+                <button onClick={() => { setMode('reset'); setError(''); setSuccess(''); }} 
+                  className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors">
+                  Esqueci minha senha
+                </button>
+              )}
+              <div>
+                <button onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setError(''); setSuccess(''); }} 
+                  className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors">
+                  {mode === 'login' ? 'Não tem conta? Cadastre-se' : 'Já tem conta? Faça login'}
+                </button>
+              </div>
+              {mode !== 'login' && (
+                <button onClick={() => { setMode('login'); setError(''); setSuccess(''); }} 
+                  className="text-sm text-slate-500 hover:text-brand-500 font-medium transition-colors block mx-auto">
+                  ← Voltar ao login
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== ONBOARDING (ESCOLHA DE MODO) ====================
+    function OnboardingFlow() {
+      const { user, userData, refreshUserData } = useAuth();
+      const [step, setStep] = useState(1);
+      const [mode, setMode] = useState('solo');
+      const [joinAction, setJoinAction] = useState('create'); // 'create' | 'join'
+      const [partnerEmail, setPartnerEmail] = useState('');
+      const [inviteCode, setInviteCode] = useState('');
+      const [generatedCode, setGeneratedCode] = useState('');
+      const [nameInCouple, setNameInCouple] = useState('Pessoa A');
+      const [error, setError] = useState('');
+      const [loading, setLoading] = useState(false);
+      
+      const handleCreateCouple = async () => {
+        setError('');
+        setLoading(true);
+        try {
+          const result = await DataService.createCoupleAndInvite(
+            { uid: user.uid, name: userData.name }, 
+            partnerEmail, 
+            nameInCouple
+          );
+          setGeneratedCode(result.inviteCode);
+          setStep(3);
+          await refreshUserData();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      const handleJoinCouple = async () => {
+        setError('');
+        setLoading(true);
+        try {
+          await DataService.acceptInviteByCode({ uid: user.uid }, inviteCode);
+          await refreshUserData();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      const handleStartSolo = async () => {
+        setLoading(true);
+        try {
+          await DataService.updateUser(user.uid, { mode: 'solo' });
+          await refreshUserData();
+        } catch (err) {
+          setError(err.message);
+        } finally {
+          setLoading(false);
+        }
+      };
+      
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900 p-4 relative overflow-hidden">
+          <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] bg-brand-500/20 rounded-full blur-[120px] animate-blob"></div>
+          <div className="absolute bottom-[-10%] right-[-10%] w-[50%] h-[50%] bg-partner-500/20 rounded-full blur-[120px] animate-blob" style={{animationDelay: '5s'}}></div>
+          
+          <div className="glass-card p-8 md:p-10 rounded-3xl w-full max-w-lg shadow-2xl relative z-10 animate-slide-up">
+            
+            {/* Passo 1: Escolher modo */}
+            {step === 1 && (
+              <>
+                <h2 className="font-extrabold text-2xl mb-2 text-slate-900 dark:text-white tracking-tight">Olá, {userData?.name}! 👋</h2>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">Como você gostaria de usar o Finanças DMX?</p>
+                
+                <div className="space-y-3 mb-6">
+                  <button onClick={() => setMode('solo')} 
+                    className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${mode === 'solo' ? 'border-brand-500 bg-brand-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">🧍</span>
+                      <div>
+                        <div className="font-bold text-lg text-slate-800 dark:text-white">Modo Solo</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">Controle suas finanças de forma privada.</div>
+                      </div>
+                    </div>
+                  </button>
+                  
+                  <button onClick={() => setMode('couple')} 
+                    className={`w-full p-5 rounded-2xl border-2 text-left transition-all ${mode === 'couple' ? 'border-partner-500 bg-partner-500/10' : 'border-slate-200 dark:border-slate-700 hover:border-slate-300 dark:hover:border-slate-600'}`}>
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">👫</span>
+                      <div>
+                        <div className="font-bold text-lg text-slate-800 dark:text-white">Modo Casal</div>
+                        <div className="text-sm text-slate-500 dark:text-slate-400">Gerencie finanças compartilhadas com divisão justa.</div>
+                      </div>
+                    </div>
+                  </button>
+                </div>
+                
+                <button onClick={() => setStep(2)} disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-0.5">
+                  {loading ? 'Processando...' : 'Continuar'}
+                </button>
+              </>
+            )}
+            
+            {/* Passo 2A: Modo Solo - Confirmação */}
+            {step === 2 && mode === 'solo' && (
+              <>
+                <h2 className="font-extrabold text-2xl mb-2 text-slate-900 dark:text-white tracking-tight">Modo Solo ativado! 🎯</h2>
+                <p className="text-slate-500 dark:text-slate-400 mb-8">Você pode mudar para o modo casal a qualquer momento nas configurações.</p>
+                
+                <button onClick={handleStartSolo} disabled={loading} className="w-full bg-brand-500 hover:bg-brand-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-0.5">
+                  {loading ? 'Ativando...' : 'Começar no Modo Solo'}
+                </button>
+                
+                <button onClick={() => setStep(1)} className="w-full mt-3 text-slate-500 hover:text-brand-500 font-medium py-2 transition-colors">
+                  ← Voltar
+                </button>
+              </>
+            )}
+            
+            {/* Passo 2B: Modo Casal - Criar ou Entrar */}
+            {step === 2 && mode === 'couple' && (
+              <>
+                <h2 className="font-extrabold text-2xl mb-2 text-slate-900 dark:text-white tracking-tight">Modo Casal 👫</h2>
+                <p className="text-slate-500 dark:text-slate-400 mb-6">Você vai criar um novo casal ou entrar em um existente?</p>
+                
+                {error && (
+                  <div className="mb-4 p-3 bg-rose-100/50 dark:bg-rose-900/30 border border-rose-200 dark:border-rose-800/50 text-rose-700 dark:text-rose-300 rounded-xl text-sm font-medium">
+                    ⚠️ {error}
+                  </div>
+                )}
+                
+                <div className="space-y-3 mb-6">
+                  <button onClick={() => setJoinAction('create')} 
+                    className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${joinAction === 'create' ? 'border-partner-500 bg-partner-500/10' : 'border-slate-200 dark:border-slate-700'}`}>
+                    <div className="font-bold text-slate-800 dark:text-white">Criar um novo casal</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Eu convido meu parceiro(a)</div>
+                  </button>
+                  
+                  <button onClick={() => setJoinAction('join')} 
+                    className={`w-full p-4 rounded-2xl border-2 text-left transition-all ${joinAction === 'join' ? 'border-partner-500 bg-partner-500/10' : 'border-slate-200 dark:border-slate-700'}`}>
+                    <div className="font-bold text-slate-800 dark:text-white">Entrar em um casal</div>
+                    <div className="text-sm text-slate-500 dark:text-slate-400">Recebi um código de convite</div>
+                  </button>
+                </div>
+                
+                {joinAction === 'create' && (
+                  <div className="space-y-4 mb-6">
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Email do seu parceiro(a)</label>
+                      <input type="email" value={partnerEmail} onChange={e => setPartnerEmail(e.target.value)} 
+                        className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-partner-500/30 focus:border-partner-500/50 transition-all duration-300" 
+                        placeholder="parceiro@email.com" />
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">⚠️ Seu parceiro(a) deve criar uma conta primeiro.</p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Como você quer ser chamado?</label>
+                      <select value={nameInCouple} onChange={e => setNameInCouple(e.target.value)} 
+                        className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-partner-500/30 focus:border-partner-500/50 transition-all duration-300">
+                        <option value="Pessoa A">Pessoa A</option>
+                        <option value="Pessoa B">Pessoa B</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+                
+                {joinAction === 'join' && (
+                  <div className="mb-6">
+                    <label className="block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5">Código de convite (6 caracteres)</label>
+                    <input type="text" value={inviteCode} onChange={e => setInviteCode(e.target.value.toUpperCase())} maxLength="6"
+                      className="w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-partner-500/30 focus:border-partner-500/50 transition-all duration-300 text-center font-mono font-bold text-xl tracking-[0.5em]" 
+                      placeholder="XXXXXX" />
+                  </div>
+                )}
+                
+                <div className="flex gap-3">
+                  <button onClick={() => setStep(1)} className="flex-1 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white font-bold py-4 rounded-xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-all">
+                    Voltar
+                  </button>
+                  <button 
+                    onClick={joinAction === 'create' ? handleCreateCouple : handleJoinCouple} 
+                    disabled={loading || (joinAction === 'create' ? !partnerEmail : !inviteCode)}
+                    className="flex-1 bg-partner-500 hover:bg-partner-600 disabled:bg-slate-400 text-white font-bold py-4 rounded-xl shadow-lg shadow-partner-500/30 transition-all hover:-translate-y-0.5 disabled:translate-y-0">
+                    {loading ? 'Processando...' : (joinAction === 'create' ? 'Criar Casal' : 'Entrar')}
+                  </button>
+                </div>
+              </>
+            )}
+            
+            {/* Passo 3: Código gerado com sucesso */}
+            {step === 3 && (
+              <>
+                <div className="text-center mb-8">
+                  <div className="w-20 h-20 mx-auto mb-4 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center text-5xl">
+                    🎉
+                  </div>
+                  <h2 className="font-extrabold text-2xl mb-2 text-slate-900 dark:text-white tracking-tight">Casal criado com sucesso!</h2>
+                  <p className="text-slate-500 dark:text-slate-400">Compartilhe este código com seu parceiro(a):</p>
+                </div>
+                
+                <div className="bg-gradient-to-br from-partner-50 to-brand-50 dark:from-partner-900/20 dark:to-brand-900/20 p-6 rounded-2xl border border-partner-200 dark:border-partner-800/50 mb-6 text-center">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-widest mb-3">Código de Convite</p>
+                  <div className="font-mono font-black text-4xl tracking-[0.3em] text-partner-600 dark:text-partner-400 mb-4">{generatedCode}</div>
+                  <button 
+                    onClick={() => { navigator.clipboard?.writeText(generatedCode); }}
+                    className="text-sm bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-white font-bold py-2 px-6 rounded-xl shadow-md transition-all">
+                    📋 Copiar código
+                  </button>
+                </div>
+                
+                <p className="text-sm text-slate-500 dark:text-slate-400 text-center mb-6">
+                  Seu parceiro(a) deve criar uma conta e usar este código na opção "Entrar em um casal".
+                </p>
+                
+                <button onClick={async () => await refreshUserData()} className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl shadow-lg shadow-brand-500/30 transition-all hover:-translate-y-0.5">
+                  Continuar para o Dashboard
+                </button>
+              </>
+            )}
+            
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== APP PRINCIPAL (DASHBOARD) ====================
+    function DashboardApp() {
+      const { user, userData, coupleData, signOut, refreshUserData } = useAuth();
+      const [activeTab, setActiveTab] = useState('dashboard');
+      const [monthFilter, setMonthFilter] = useState(() => { 
+        const d = new Date(); 
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`; 
+      });
+      const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
+      const [toasts, setToasts] = useState([]);
+      const [showAI, setShowAI] = useState(false);
+      
+      // Dados
+      const [transactions, setTransactions] = useState([]);
+      const [goals, setGoals] = useState([]);
+      const [budgets, setBudgets] = useState({});
+      const [subscriptions, setSubscriptions] = useState([]);
+      const [installments, setInstallments] = useState([]);
+      const [partnerData, setPartnerData] = useState(null);
+      const [loadingData, setLoadingData] = useState(true);
+      
+      // Formulários
+      const [txForm, setTxForm] = useState({ 
+        id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', 
+        customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user?.uid 
+      });
+      const [goalForm, setGoalForm] = useState({ id: null, name: '', target: '', current: '0' });
+      const [budgetForm, setBudgetForm] = useState({ category: 'Alimentação', limit: '' });
+      const [subForm, setSubForm] = useState({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
+      const [instForm, setInstForm] = useState({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
+      
+      const [formErrors, setFormErrors] = useState({ tx: {}, goal: {}, budget: {}, sub: {}, inst: {} });
+      
+      // Configurações de casal
+      const [settings, setSettings] = useState({ 
+        salaryA: 0, salaryB: 0, 
+        nameA: userData?.settings?.nameInCouple || 'Pessoa A', 
+        nameB: 'Pessoa B',
+        updatedAt: Date.now() 
+      });
+      
+      const isCouple = userData?.mode === 'couple';
+      
+      const showToast = useCallback((msg, isError = false) => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, msg, isError }]);
+        setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 4000);
+      }, []);
+      
+      // Tema
+      useEffect(() => {
+        localStorage.setItem('theme', theme);
+        if (theme === 'dark') document.documentElement.classList.add('dark');
+        else document.documentElement.classList.remove('dark');
+      }, [theme]);
+      
+      // Carregar dados iniciais
+      useEffect(() => {
+        const loadData = async () => {
+          setLoadingData(true);
+          try {
+            const [txs, gls, subs, insts, bdg] = await Promise.all([
+              fetchAllTransactions(user.uid, userData?.coupleId),
+              fetchCollection('goals', user.uid, userData?.coupleId),
+              fetchCollection('subscriptions', user.uid, userData?.coupleId),
+              fetchCollection('installments', user.uid, userData?.coupleId),
+              fetchBudgets(user.uid, userData?.coupleId)
+            ]);
+            
+            setTransactions(txs);
+            setGoals(gls);
+            setSubscriptions(subs);
+            setInstallments(insts);
+            setBudgets(bdg);
+            
+            // Se em modo casal, buscar dados do parceiro
+            if (isCouple && userData?.partnerId) {
+              const partner = await DataService.getUserData(userData.partnerId);
+              setPartnerData(partner);
+              
+              if (coupleData?.settings) {
+                setSettings({
+                  salaryA: coupleData.settings.salaryA || 0,
+                  salaryB: coupleData.settings.salaryB || 0,
+                  nameA: coupleData.settings.nameA || 'Pessoa A',
+                  nameB: coupleData.settings.nameB || 'Pessoa B',
+                  updatedAt: Date.now()
+                });
+              }
+            }
+          } catch (err) {
+            console.error('Erro ao carregar dados:', err);
+            showToast('Erro ao carregar dados', true);
+          } finally {
+            setLoadingData(false);
+          }
+        };
+        
+        if (user && userData?.mode) {
+          loadData();
+        }
+      }, [user, userData, coupleData, isCouple]);
+      
+      // Dados derivados
+      const filteredTransactions = useMemo(() => 
+        transactions.filter(t => t.date?.startsWith(monthFilter)), 
+        [transactions, monthFilter]
+      );
+      
+      const totals = useMemo(() => {
+        let inc = 0, exp = 0;
+        filteredTransactions.forEach(t => {
+          if (t.type === 'income') inc += t.value;
+          else exp += t.value;
+        });
+        const salaryTotal = (parseFloat(settings.salaryA) || 0) + (parseFloat(settings.salaryB) || 0);
+        return { inc: inc + salaryTotal, exp, balance: (inc + salaryTotal) - exp };
+      }, [filteredTransactions, settings]);
+      
+      const categoriesTotal = useMemo(() => {
+        const expenses = {};
+        filteredTransactions.forEach(t => {
+          if (t.type === 'expense') {
+            if (!expenses[t.category]) expenses[t.category] = { val: 0, count: 0 };
+            expenses[t.category].val += t.value;
+            expenses[t.category].count += 1;
+          }
+        });
+        return expenses;
+      }, [filteredTransactions]);
+      
+      const totalSubscriptions = useMemo(() => 
+        subscriptions.filter(s => s.active).reduce((acc, curr) => acc + parseFloat(curr.value), 0), 
+        [subscriptions]
+      );
+      
+      const splitLogic = useMemo(() => {
+        if (!isCouple) return null;
+        
+        const salA = parseFloat(settings.salaryA) || 0;
+        const salB = parseFloat(settings.salaryB) || 0;
+        const totalSal = salA + salB;
+        const ratioA = totalSal > 0 ? salA / totalSal : 0.5;
+        const ratioB = totalSal > 0 ? salB / totalSal : 0.5;
+        
+        const sharedExpenses = filteredTransactions.filter(t => t.scope === 'shared' && t.type === 'expense');
+        const totalSharedExp = sharedExpenses.reduce((acc, t) => acc + t.value, 0);
+        
+        const paidByA = sharedExpenses.filter(t => t.paidBy === user.uid).reduce((acc, t) => acc + t.value, 0);
+        const paidByB = sharedExpenses.filter(t => t.paidBy === userData.partnerId).reduce((acc, t) => acc + t.value, 0);
+        
+        const owedByA = totalSharedExp * ratioA;
+        const owedByB = totalSharedExp * ratioB;
+        
+        return {
+          totalSharedExp,
+          ratioA, ratioB,
+          paidByA, paidByB,
+          owedByA, owedByB,
+          balanceA: paidByA - owedByA,
+          balanceB: paidByB - owedByB
+        };
+      }, [filteredTransactions, settings, isCouple, user.uid, userData?.partnerId]);
+      
+      // Handlers de CRUD
+      const handleSaveTx = async (e) => {
+        e.preventDefault();
+        const errors = {};
+        if (!txForm.desc.trim()) errors.desc = 'Descrição obrigatória';
+        const val = parseFloat(txForm.value);
+        if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
+        if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, tx: errors})); return; }
+        
+        const payload = {
+          ...txForm,
+          ownerId: user.uid,
+          coupleId: txForm.scope === 'shared' ? userData.coupleId : null,
+          category: txForm.customCategory.trim() || txForm.category,
+          value: val,
+          paidBy: txForm.scope === 'shared' ? user.uid : user.uid,
+        };
+        
+        try {
+          if (txForm.id) {
+            await DataService.updateTransaction(txForm.id, payload);
+          } else {
+            await DataService.addTransaction(payload);
+          }
+          
+          const newTxs = await fetchAllTransactions(user.uid, userData.coupleId);
+          setTransactions(newTxs);
+          
+          setTxForm({ 
+            id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', 
+            customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user.uid 
+          });
+          setFormErrors(prev => ({...prev, tx: {}}));
+          showToast("Transação salva.");
+        } catch (err) {
+          showToast('Erro ao salvar transação', true);
+        }
+      };
+      
+      const handleDeleteTx = async (id) => {
+        if (!window.confirm("Apagar esta transação?")) return;
+        try {
+          await DataService.deleteTransaction(id);
+          setTransactions(prev => prev.filter(t => t.id !== id));
+          showToast("Transação excluída.");
+        } catch (err) {
+          showToast('Erro ao excluir', true);
+        }
+      };
+      
+      const handleSaveGoal = async (e) => {
+        e.preventDefault();
+        const errors = {};
+        if (!goalForm.name.trim()) errors.name = 'Nome obrigatório';
+        const target = parseFloat(goalForm.target);
+        if (isNaN(target) || target <= 0) errors.target = 'Valor alvo inválido';
+        if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, goal: errors})); return; }
+        
+        const payload = {
+          ...goalForm,
+          ownerId: user.uid,
+          coupleId: userData.coupleId,
+          scope: isCouple ? 'shared' : 'private',
+          target,
+          current: parseFloat(goalForm.current) || 0
+        };
+        
+        try {
+          if (goalForm.id) {
+            await DataService.updateGoal(goalForm.id, payload);
+          } else {
+            await DataService.addGoal(payload);
+          }
+          
+          const newGoals = await fetchCollection('goals', user.uid, userData.coupleId);
+          setGoals(newGoals);
+          
+          setGoalForm({ id: null, name: '', target: '', current: '0' });
+          setFormErrors(prev => ({...prev, goal: {}}));
+          showToast("Meta salva.");
+        } catch (err) {
+          showToast('Erro ao salvar meta', true);
+        }
+      };
+      
+      const handleDeleteGoal = async (id) => {
+        if (!window.confirm("Apagar esta meta?")) return;
+        try {
+          await DataService.deleteGoal(id);
+          setGoals(prev => prev.filter(g => g.id !== id));
+          showToast("Meta excluída.");
+        } catch (err) {
+          showToast('Erro ao excluir', true);
+        }
+      };
+      
+      const handleSaveSub = async (e) => {
+        e.preventDefault();
+        const errors = {};
+        if (!subForm.desc.trim()) errors.desc = 'Descrição obrigatória';
+        const val = parseFloat(subForm.value);
+        if (isNaN(val) || val <= 0) errors.value = 'Valor inválido';
+        if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, sub: errors})); return; }
+        
+        const payload = {
+          ...subForm,
+          ownerId: user.uid,
+          coupleId: userData.coupleId,
+          scope: isCouple ? 'shared' : 'private',
+          value: val,
+          dayOfMonth: parseInt(subForm.dayOfMonth),
+          active: true
+        };
+        
+        try {
+          if (subForm.id) {
+            await DataService.updateSubscription(subForm.id, payload);
+          } else {
+            await DataService.addSubscription(payload);
+          }
+          
+          const newSubs = await fetchCollection('subscriptions', user.uid, userData.coupleId);
+          setSubscriptions(newSubs);
+          
+          setSubForm({ id: null, desc: '', value: '', category: 'Assinaturas', dayOfMonth: 1 });
+          setFormErrors(prev => ({...prev, sub: {}}));
+          showToast("Assinatura salva.");
+        } catch (err) {
+          showToast('Erro ao salvar', true);
+        }
+      };
+      
+      const handleToggleSub = async (sub) => {
+        try {
+          await DataService.updateSubscription(sub.id, { active: !sub.active });
+          setSubscriptions(prev => prev.map(s => s.id === sub.id ? {...s, active: !s.active} : s));
+        } catch (err) {
+          showToast('Erro ao atualizar', true);
+        }
+      };
+      
+      const handleDeleteSub = async (id) => {
+        if (!window.confirm("Apagar esta assinatura?")) return;
+        try {
+          await DataService.deleteSubscription(id);
+          setSubscriptions(prev => prev.filter(s => s.id !== id));
+        } catch (err) {
+          showToast('Erro ao excluir', true);
+        }
+      };
+      
+      const handleSaveInst = async (e) => {
+        e.preventDefault();
+        const errors = {};
+        if (!instForm.desc.trim()) errors.desc = 'Descrição obrigatória';
+        const val = parseFloat(instForm.installmentValue);
+        if (isNaN(val) || val <= 0) errors.installmentValue = 'Valor inválido';
+        const tot = parseInt(instForm.totalInstallments);
+        if (isNaN(tot) || tot < 2) errors.totalInstallments = 'Mínimo 2 parcelas';
+        if (Object.keys(errors).length) { setFormErrors(prev => ({...prev, inst: errors})); return; }
+        
+        const paid = parseInt(instForm.paidInstallments) || 0;
+        const payload = {
+          ...instForm,
+          ownerId: user.uid,
+          coupleId: userData.coupleId,
+          scope: isCouple ? 'shared' : 'private',
+          installmentValue: val,
+          totalInstallments: tot,
+          paidInstallments: paid,
+          dayOfMonth: parseInt(instForm.dayOfMonth),
+          active: paid < tot
+        };
+        
+        try {
+          if (instForm.id) {
+            await DataService.updateInstallment(instForm.id, payload);
+          } else {
+            await DataService.addInstallment(payload);
+          }
+          
+          const newInsts = await fetchCollection('installments', user.uid, userData.coupleId);
+          setInstallments(newInsts);
+          
+          setInstForm({ id: null, desc: '', installmentValue: '', paidInstallments: 0, totalInstallments: 2, dayOfMonth: 1, category: 'Dívidas' });
+          setFormErrors(prev => ({...prev, inst: {}}));
+          showToast("Parcelamento salvo.");
+        } catch (err) {
+          showToast('Erro ao salvar', true);
+        }
+      };
+      
+      const handleDeleteInst = async (id) => {
+        if (!window.confirm("Apagar este parcelamento?")) return;
+        try {
+          await DataService.deleteInstallment(id);
+          setInstallments(prev => prev.filter(i => i.id !== id));
+        } catch (err) {
+          showToast('Erro ao excluir', true);
+        }
+      };
+      
+      const handleSetBudget = async (e) => {
+        e.preventDefault();
+        const lim = parseFloat(budgetForm.limit);
+        if (isNaN(lim) || lim <= 0) { setFormErrors(prev => ({...prev, budget: {limit: 'Valor inválido'}})); return; }
+        
+        try {
+          await DataService.setBudget(user.uid, userData.coupleId, budgetForm.category, lim);
+          setBudgets(prev => ({ ...prev, [budgetForm.category]: lim }));
+          setBudgetForm({ category: 'Alimentação', limit: '' });
+          setFormErrors(prev => ({...prev, budget: {}}));
+          showToast("Orçamento definido.");
+        } catch (err) {
+          showToast('Erro ao salvar', true);
+        }
+      };
+      
+      const handleDeleteBudget = async (cat) => {
+        try {
+          await DataService.deleteBudget(user.uid, userData.coupleId, cat);
+          const newB = { ...budgets };
+          delete newB[cat];
+          setBudgets(newB);
+        } catch (err) {
+          showToast('Erro ao excluir', true);
+        }
+      };
+      
+      const handleUpdateCoupleSettings = async () => {
+        if (!isCouple) return;
+        try {
+          await DataService.updateCouple(userData.coupleId, {
+            settings: {
+              nameA: settings.nameA,
+              nameB: settings.nameB,
+              salaryA: parseFloat(settings.salaryA) || 0,
+              salaryB: parseFloat(settings.salaryB) || 0,
+            }
+          });
+          showToast("Configurações do casal atualizadas.");
+        } catch (err) {
+          showToast('Erro ao salvar', true);
+        }
+      };
+      
+      const generateAIReport = () => {
+        const r = [];
+        const bal = totals.inc - totals.exp;
+        const sr = totals.inc > 0 ? (bal / totals.inc) * 100 : 0;
+        if (totals.inc === 0) r.push({ type: 'warning', icon: '⚠️', title: 'Sem Renda', text: 'Cadastre salários na aba Config.' });
+        else if (totals.exp > totals.inc) r.push({ type: 'danger', icon: '🚨', title: 'Gastos Excedentes', text: `Gastou ${formatMoney(Math.abs(bal))} a mais.` });
+        else if (sr >= 20) r.push({ type: 'success', icon: '🏆', title: 'Saúde Impecável', text: `Poupou ${sr.toFixed(1)}% da renda.` });
+        else r.push({ type: 'warning', icon: '📉', title: 'Atenção', text: `Reteve apenas ${sr.toFixed(1)}%.` });
+        
+        const cats = Object.entries(categoriesTotal).sort((a,b)=>b[1].val - a[1].val);
+        if (cats.length > 0) r.push({ type: 'info', icon: '💡', title: `Maior Foco: ${cats[0][0]}`, text: `${((cats[0][1].val / totals.exp)*100).toFixed(1)}% das despesas.` });
+        return r;
+      };
+      
+      if (loadingData) {
+        return <div className="min-h-screen flex items-center justify-center text-brand-500 font-bold text-xl animate-pulse">Carregando suas finanças...</div>;
+      }
+      
+      const inputClass = "w-full px-4 py-3 bg-slate-100/50 dark:bg-slate-800/50 border border-transparent rounded-xl outline-none focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-brand-500/30 focus:border-brand-500/50 transition-all duration-300 text-sm";
+      const labelClass = "block text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider mb-1.5";
+      
+      return (
+        <div className="flex flex-col md:flex-row min-h-screen relative">
+          <nav className="glass-card md:w-72 flex-shrink-0 md:h-screen md:sticky top-0 z-50 p-6 flex md:flex-col justify-between order-last md:order-first fixed bottom-0 left-0 right-0 border-t md:border-t-0 md:border-r border-white/40 dark:border-white/5">
+            <div className="flex flex-col h-full w-full overflow-y-auto custom-scrollbar">
+              <div className="hidden md:flex items-center gap-3 mb-10">
+                <div className="w-12 h-12 flex items-center justify-center bg-white/20 dark:bg-slate-800/50 rounded-xl p-1 shadow-inner border border-white/40 dark:border-white/10">
+                  <div className="w-full h-full rounded-lg bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-xl">D</div>
+                </div>
+                <div>
+                  <h1 className="font-extrabold text-lg tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-brand-600 to-brand-400 dark:from-brand-400 dark:to-brand-200">Finanças DMX</h1>
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em]">{isCouple ? 'Modo Casal' : 'Modo Solo'}</p>
+                </div>
+              </div>
+              
+              <div className="flex md:flex-col justify-around md:justify-start gap-1 md:gap-2 flex-1">
+                {[
+                  { id: 'dashboard', icon: '📊', label: 'Dashboard' },
+                  { id: 'transactions', icon: '💸', label: 'Transações' },
+                  { id: 'subscriptions', icon: '🔁', label: 'Assinaturas' },
+                  { id: 'installments', icon: '💳', label: 'Parcelas' },
+                  { id: 'goals', icon: '🎯', label: 'Metas' },
+                  { id: 'budgets', icon: '💰', label: 'Orçamentos' },
+                  { id: 'sync', icon: '⚙️', label: 'Configurações' }
+                ].map(tab => (
+                  <button key={tab.id} onClick={() => setActiveTab(tab.id)} 
+                    className={`flex flex-col md:flex-row items-center md:justify-start gap-3 px-4 py-3 rounded-2xl transition-all duration-300 font-semibold text-xs md:text-sm ${activeTab === tab.id ? 'bg-gradient-to-r from-slate-900 to-slate-800 text-white dark:from-white dark:to-slate-200 dark:text-slate-900 shadow-lg shadow-brand-500/20 transform md:translate-x-1 border border-white/10' : 'text-slate-500 hover:bg-slate-200/50 dark:hover:bg-slate-800/50 hover:text-slate-800 dark:hover:text-slate-200'}`}
+                    aria-current={activeTab === tab.id ? 'page' : undefined}>
+                    <span className="text-lg md:text-xl drop-shadow-sm" aria-hidden="true">{tab.icon}</span>
+                    <span className="hidden md:inline tracking-wide">{tab.label}</span>
+                  </button>
+                ))}
+              </div>
+              
+              <button onClick={signOut} className="hidden md:flex mt-4 items-center justify-center gap-2 px-4 py-3 rounded-2xl text-slate-500 hover:bg-rose-100 dark:hover:bg-rose-900/30 hover:text-rose-600 transition-all text-sm font-semibold">
+                🚪 Sair
+              </button>
+            </div>
+          </nav>
+          
+          <main className="flex-1 p-4 md:p-10 pb-28 md:pb-10 max-h-screen overflow-y-auto custom-scrollbar">
+            <header className="md:hidden flex items-center justify-between mb-8 px-2">
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-sm">D</div>
+                <h1 className="font-extrabold text-lg tracking-tight">Finanças DMX</h1>
+              </div>
+              <button onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')} className="p-2 glass-card rounded-full shadow-sm" aria-label="Alternar tema">
+                {theme === 'dark' ? '☀️' : '🌙'}
+              </button>
+            </header>
+            
+            <div className="max-w-6xl mx-auto space-y-8 pb-10 animate-fade-in">
+              <div className="flex flex-wrap items-center justify-between gap-4 glass-card p-5 rounded-3xl">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-brand-100 dark:bg-brand-900/30 flex items-center justify-center text-brand-600 dark:text-brand-400 font-bold text-lg shadow-inner" aria-hidden="true">📅</div>
+                  <input type="month" value={monthFilter} onChange={(e) => setMonthFilter(e.target.value)} className="bg-transparent font-bold text-lg md:text-xl outline-none cursor-pointer text-slate-700 dark:text-slate-200" />
+                </div>
+                <div className="text-right">
+                  <p className="text-[10px] text-slate-500 uppercase font-bold tracking-[0.2em] mb-1">Saldo Mensal</p>
+                  <p className={`text-3xl font-black tracking-tight drop-shadow-sm ${totals.balance >= 0 ? 'text-brand-600 dark:text-brand-400' : 'text-rose-600 dark:text-rose-400'}`}>{formatMoney(totals.balance)}</p>
+                </div>
+              </div>
+              
+              {activeTab === 'dashboard' && (
+                <div className="space-y-6 animate-slide-up">
+                  {isCouple && splitLogic && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <BentoCard className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white border-none overflow-hidden relative" title="Acerto de Contas do Casal" icon="🤝">
+                        <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 relative z-10">
+                          <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10"><p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p><p className="text-xl font-black">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p></div>
+                          <div className="p-4 bg-brand-500/20 rounded-2xl backdrop-blur-sm border border-brand-500/20"><p className="text-[10px] text-brand-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameA}</p><p className="text-xl font-black text-brand-300">{(splitLogic.ratioA * 100).toFixed(1)}%</p></div>
+                          <div className="p-4 bg-partner-500/20 rounded-2xl backdrop-blur-sm border border-partner-500/20"><p className="text-[10px] text-partner-300 uppercase font-bold tracking-wider mb-1">Peso {settings.nameB}</p><p className="text-xl font-black text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p></div>
+                        </div>
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-black/30 rounded-2xl border border-white/5 relative z-10">
+                          <div><p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gastos Compartilhados</p><p className="text-3xl font-black mt-1 drop-shadow-md">{formatMoney(splitLogic.totalSharedExp)}</p></div>
+                          <div className="text-center md:text-right">
+                            {splitLogic.balanceA > 0 ? <div className="text-brand-400"><span className="text-sm font-medium">A receber de {settings.nameB}</span><br/><span className="text-3xl font-black drop-shadow-md">{formatMoney(splitLogic.balanceA)}</span></div>
+                            : splitLogic.balanceB > 0 ? <div className="text-rose-400"><span className="text-sm font-medium">A pagar para {settings.nameB}</span><br/><span className="text-3xl font-black drop-shadow-md">{formatMoney(splitLogic.balanceB)}</span></div>
+                            : <div className="text-slate-300 text-lg font-bold">Contas saldadas! ✅</div>}
+                          </div>
+                        </div>
+                      </BentoCard>
+                      
+                      <BentoCard title="Resumo" icon="📈">
+                        <div className="space-y-4">
+                          <div className="p-5 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50">
+                            <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Receitas</p>
+                            <p className="text-2xl font-black text-brand-700 dark:text-brand-300">{formatMoney(totals.inc)}</p>
+                          </div>
+                          <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50">
+                            <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Despesas</p>
+                            <p className="text-2xl font-black text-rose-700 dark:text-rose-300">{formatMoney(totals.exp)}</p>
+                          </div>
+                        </div>
+                      </BentoCard>
+                    </div>
+                  )}
+                  
+                  {!isCouple && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <BentoCard title="Receitas" icon="💰">
+                        <div className="p-5 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50">
+                          <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Total de Receitas</p>
+                          <p className="text-3xl font-black text-brand-700 dark:text-brand-300">{formatMoney(totals.inc)}</p>
+                        </div>
+                      </BentoCard>
+                      <BentoCard title="Despesas" icon="💸">
+                        <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50">
+                          <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Total de Despesas</p>
+                          <p className="text-3xl font-black text-rose-700 dark:text-rose-300">{formatMoney(totals.exp)}</p>
+                        </div>
+                      </BentoCard>
+                    </div>
+                  )}
+                  
+                  <div className="flex justify-end">
+                    <button onClick={() => setShowAI(!showAI)} className={`flex items-center gap-2 px-6 py-3 rounded-2xl font-bold transition-all shadow-xl hover:shadow-2xl hover:-translate-y-1 ${showAI ? 'bg-slate-800 text-white dark:bg-slate-200 dark:text-slate-900' : 'bg-gradient-to-r from-blue-600 to-partner-600 text-white shadow-[0_10px_30px_rgba(139,92,246,0.3)]'}`} aria-expanded={showAI}>
+                      <span className="animate-pulse">✨</span> {showAI ? 'Ocultar Inteligência' : 'Analisar Finanças com IA'}
+                    </button>
+                  </div>
+                  
+                  {showAI && (
+                    <div className="glass-card p-6 md:p-8 rounded-3xl shadow-2xl border border-blue-500/20 animate-slide-up relative overflow-hidden">
+                      <div className="absolute -left-20 -top-20 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                      <h3 className="font-extrabold text-xl mb-6 flex items-center gap-2 relative z-10"><span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-partner-500">Relatório Heurístico</span></h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 relative z-10">
+                        {generateAIReport().map((r, idx) => {
+                          const styles = { success: 'bg-emerald-50/80 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300', warning: 'bg-amber-50/80 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300', danger: 'bg-rose-50/80 dark:bg-rose-900/20 border-rose-200 dark:border-rose-800 text-rose-800 dark:text-rose-300', info: 'bg-blue-50/80 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300' };
+                          return (
+                            <div key={idx} className={`p-5 rounded-2xl border backdrop-blur-sm ${styles[r.type]}`}>
+                              <h4 className="font-bold mb-2 flex items-center gap-2 text-sm uppercase tracking-wide"><span aria-hidden="true">{r.icon}</span> {r.title}</h4>
+                              <p className="text-sm font-medium opacity-90 leading-relaxed">{r.text}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <BentoCard title="Onde gastou?" icon="🍩">
+                      <DonutChart categoriesTotal={categoriesTotal} />
+                    </BentoCard>
+                    <BentoCard title="Evolução (6 meses)" icon="📊">
+                      <EvolutionChart transactions={transactions} settings={settings} />
+                    </BentoCard>
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'transactions' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveTx} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 top-0 w-64 h-64 bg-brand-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">{txForm.id ? 'Editar Transação' : 'Nova Transação'}</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 relative z-10">
+                      <div className="md:col-span-2">
+                        <label className={labelClass}>O que foi?</label>
+                        <input type="text" value={txForm.desc} onChange={e=>setTxForm({...txForm, desc: e.target.value})} className={`${inputClass} ${formErrors.tx.desc ? 'field-error' : ''}`} placeholder="Ex: Supermercado" />
+                        {formErrors.tx.desc && <div className="error-message">⚠️ {formErrors.tx.desc}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Valor (R$)</label>
+                        <input type="number" step="0.01" value={txForm.value} onChange={e=>setTxForm({...txForm, value: e.target.value})} className={`${inputClass} ${formErrors.tx.value ? 'field-error' : ''}`} placeholder="0,00" />
+                        {formErrors.tx.value && <div className="error-message">⚠️ {formErrors.tx.value}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Categoria</label>
+                        <select value={txForm.category} onChange={e=>setTxForm({...txForm, category: e.target.value})} className={inputClass}>{predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Tipo</label>
+                        <select value={txForm.type} onChange={e=>setTxForm({...txForm, type: e.target.value})} className={inputClass}><option value="expense">Despesa</option><option value="income">Receita</option></select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Data</label>
+                        <input type="date" value={txForm.date} onChange={e=>setTxForm({...txForm, date: e.target.value})} className={`${inputClass} [color-scheme:light] dark:[color-scheme:dark]`} />
+                      </div>
+                      {isCouple && (
+                        <div>
+                          <label className={labelClass}>Visibilidade</label>
+                          <select value={txForm.scope} onChange={e=>setTxForm({...txForm, scope: e.target.value})} className={inputClass}>
+                            <option value="private">🔒 Pessoal (só eu vejo)</option>
+                            <option value="shared">👥 Compartilhada (casal vê)</option>
+                          </select>
+                        </div>
+                      )}
+                      <div className="col-span-full flex justify-end gap-3 mt-2">
+                        {txForm.id && <button type="button" onClick={()=>{setTxForm({ id: null, desc: '', value: '', type: 'expense', category: 'Alimentação', customCategory: '', date: getLocalDateString(), scope: 'private', paidBy: user.uid }); setFormErrors(prev => ({...prev, tx: {}}));}} className="px-8 py-3 bg-slate-200 dark:bg-slate-700/50 rounded-xl font-bold hover:bg-slate-300 transition-colors">Cancelar</button>}
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:shadow-[0_15px_30px_rgba(20,184,166,0.4)] hover:-translate-y-0.5 transition-all">Salvar</button>
+                      </div>
+                    </div>
+                  </form>
+                  
+                  <BentoCard title={`Transações de ${monthFilter}`}>
+                    <div className="space-y-3 max-h-[600px] overflow-y-auto pr-2 custom-scrollbar">
+                      {filteredTransactions.length === 0 ? <p className="text-center py-10 text-slate-400 font-medium">Nenhuma transação neste mês.</p> : filteredTransactions.map((t, index) => (
+                        <div key={t.id} className="flex justify-between items-center p-5 rounded-2xl bg-slate-100/50 dark:bg-slate-800/30 hover:bg-white dark:hover:bg-slate-800 border border-transparent hover:border-slate-200 dark:hover:border-slate-700 transition-all group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
+                          <div>
+                            <p className="font-bold flex items-center gap-2 text-slate-800 dark:text-slate-100 text-base">
+                              {t.desc} 
+                              {t.scope === 'shared' && <span className="text-[9px] bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm">Compart.</span>}
+                              {t.scope === 'private' && <span className="text-[9px] bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400 px-2 py-0.5 rounded-full uppercase font-black tracking-widest shadow-sm">Pessoal</span>}
+                            </p>
+                            <p className="text-xs text-slate-500 mt-1 font-medium">{t.category} &bull; {t.date?.split('-').reverse().join('/')}</p>
+                          </div>
+                          <div className="flex items-center gap-5">
+                            <span className={`font-black text-lg drop-shadow-sm ${t.type==='income'?'text-brand-500 dark:text-brand-400':'text-slate-800 dark:text-white'}`}>{t.type==='income'?'+':'-'}{formatMoney(t.value)}</span>
+                            <div className="opacity-0 group-hover:opacity-100 flex gap-2 transition-opacity">
+                              <button type="button" onClick={()=>setTxForm(t)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-brand-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Editar">✏️</button>
+                              <button type="button" onClick={()=>handleDeleteTx(t.id)} className="p-2.5 bg-white dark:bg-slate-700 hover:bg-rose-500 hover:text-white rounded-xl shadow-sm transition-colors" aria-label="Excluir">🗑️</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </BentoCard>
+                </div>
+              )}
+              
+              {activeTab === 'subscriptions' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveSub} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 bottom-0 w-64 h-64 bg-partner-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 relative z-10">
+                      <h3 className="font-extrabold text-xl">Nova Assinatura</h3>
+                      <div className="mt-4 md:mt-0 px-5 py-3 bg-rose-50 dark:bg-rose-900/20 rounded-2xl border border-rose-100 dark:border-rose-800/50 shadow-inner">
+                        <p className="text-[10px] text-rose-500 font-bold uppercase tracking-widest mb-1">Custo Fixo Mensal</p>
+                        <p className="font-black text-rose-600 dark:text-rose-400 text-xl">{formatMoney(totalSubscriptions)}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-end relative z-10">
+                      <div className="lg:col-span-2">
+                        <label className={labelClass}>Serviço</label>
+                        <input type="text" value={subForm.desc} onChange={e=>setSubForm({...subForm, desc: e.target.value})} className={`${inputClass} ${formErrors.sub.desc ? 'field-error' : ''}`} placeholder="Ex: Netflix" />
+                        {formErrors.sub.desc && <div className="error-message">⚠️ {formErrors.sub.desc}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Valor (R$)</label>
+                        <input type="number" step="0.01" value={subForm.value} onChange={e=>setSubForm({...subForm, value: e.target.value})} className={`${inputClass} ${formErrors.sub.value ? 'field-error' : ''}`} placeholder="0,00" />
+                        {formErrors.sub.value && <div className="error-message">⚠️ {formErrors.sub.value}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Dia Venc.</label>
+                        <input type="number" min="1" max="31" value={subForm.dayOfMonth} onChange={e=>setSubForm({...subForm, dayOfMonth: e.target.value})} className={`${inputClass} ${formErrors.sub.dayOfMonth ? 'field-error' : ''} text-center`} />
+                      </div>
+                      <div className="col-span-full flex justify-end gap-3 mt-4">
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar</button>
+                      </div>
+                    </div>
+                  </form>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma assinatura cadastrada.</div> : subscriptions.map((s, idx) => (
+                      <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-50 grayscale'}`} style={{ animationDelay: `${idx * 100}ms` }}>
+                        <div className="flex justify-between items-start mb-6">
+                          <div><h4 className="font-extrabold text-lg text-slate-800 dark:text-white">{s.desc}</h4><p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p></div>
+                          <div className="flex gap-2">
+                            <button onClick={()=>setSubForm(s)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-colors">✏️</button>
+                            <button onClick={()=>handleDeleteSub(s.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors">🗑️</button>
+                          </div>
+                        </div>
+                        <div className="flex justify-between items-end mb-6">
+                          <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Valor</p><p className="font-black text-3xl tracking-tight text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(s.value)}</p></div>
+                          <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Dia</p><p className="font-black text-xl text-brand-500 drop-shadow-sm">{s.dayOfMonth}</p></div>
+                        </div>
+                        <button onClick={()=>handleToggleSub(s)} className={`w-full py-3.5 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200' : 'bg-brand-500 text-white shadow-lg'}`}>{s.active ? 'Pausar' : 'Reativar'}</button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'installments' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveInst} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute left-0 bottom-0 w-64 h-64 bg-blue-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">Novo Parcelamento</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-5 items-end relative z-10">
+                      <div className="lg:col-span-2">
+                        <label className={labelClass}>Compra</label>
+                        <input type="text" value={instForm.desc} onChange={e=>setInstForm({...instForm, desc: e.target.value})} className={`${inputClass} ${formErrors.inst.desc ? 'field-error' : ''}`} />
+                        {formErrors.inst.desc && <div className="error-message">⚠️ {formErrors.inst.desc}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Parcela (R$)</label>
+                        <input type="number" step="0.01" value={instForm.installmentValue} onChange={e=>setInstForm({...instForm, installmentValue: e.target.value})} className={`${inputClass} ${formErrors.inst.installmentValue ? 'field-error' : ''}`} />
+                        {formErrors.inst.installmentValue && <div className="error-message">⚠️ {formErrors.inst.installmentValue}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Total Parcelas</label>
+                        <input type="number" min="2" value={instForm.totalInstallments} onChange={e=>setInstForm({...instForm, totalInstallments: e.target.value})} className={`${inputClass} ${formErrors.inst.totalInstallments ? 'field-error' : ''} text-center`} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Dia Venc.</label>
+                        <input type="number" min="1" max="31" value={instForm.dayOfMonth} onChange={e=>setInstForm({...instForm, dayOfMonth: e.target.value})} className={`${inputClass} text-center`} />
+                      </div>
+                      <div className="col-span-full flex justify-end gap-3 mt-4">
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar</button>
+                      </div>
+                    </div>
+                  </form>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {installments.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhum parcelamento ativo. Que paz! 🕊️</div> : installments.map((i, idx) => {
+                      const cur = Math.min(parseInt(i.paidInstallments) || 0, parseInt(i.totalInstallments));
+                      const pct = i.totalInstallments > 0 ? (cur / parseInt(i.totalInstallments)) * 100 : 0;
+                      return (
+                        <div key={i.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${i.active ? 'hover:-translate-y-1 hover:shadow-2xl' : 'opacity-70'}`} style={{ animationDelay: `${idx * 100}ms` }}>
+                          <div className="flex justify-between items-start mb-6">
+                            <h4 className="font-extrabold text-lg text-slate-800 dark:text-white">{i.desc}</h4>
+                            <div className="flex gap-2">
+                              <button onClick={()=>setInstForm(i)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-colors">✏️</button>
+                              <button onClick={()=>handleDeleteInst(i.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors">🗑️</button>
+                            </div>
+                          </div>
+                          <div className="mb-6">
+                            <div className="flex justify-between text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2"><span>{cur}/{i.totalInstallments}</span><span>{pct.toFixed(0)}%</span></div>
+                            <div className="w-full h-2.5 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden shadow-inner">
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${i.active ? 'bg-gradient-to-r from-brand-400 to-brand-600 shadow-[0_0_10px_rgba(20,184,166,0.5)]' : 'bg-emerald-500'}`} style={{width: `${pct}%`}}></div>
+                            </div>
+                          </div>
+                          <div className="flex justify-between items-end">
+                            <div><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Parcela</p><p className="font-black text-2xl text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(i.installmentValue)}</p></div>
+                            <div className="text-right"><p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Venc.</p><p className="font-black text-xl text-brand-500 drop-shadow-sm">Dia {i.dayOfMonth}</p></div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'goals' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSaveGoal} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 bottom-0 w-64 h-64 bg-emerald-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">Nova Meta</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end relative z-10">
+                      <div>
+                        <label className={labelClass}>Objetivo</label>
+                        <input type="text" value={goalForm.name} onChange={e=>setGoalForm({...goalForm, name: e.target.value})} className={`${inputClass} ${formErrors.goal.name ? 'field-error' : ''}`} />
+                        {formErrors.goal.name && <div className="error-message">⚠️ {formErrors.goal.name}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Alvo (R$)</label>
+                        <input type="number" step="0.01" value={goalForm.target} onChange={e=>setGoalForm({...goalForm, target: e.target.value})} className={`${inputClass} ${formErrors.goal.target ? 'field-error' : ''}`} />
+                        {formErrors.goal.target && <div className="error-message">⚠️ {formErrors.goal.target}</div>}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Já Guardado (R$)</label>
+                        <input type="number" step="0.01" value={goalForm.current} onChange={e=>setGoalForm({...goalForm, current: e.target.value})} className={inputClass} />
+                      </div>
+                      <div className="col-span-full flex justify-end gap-3 mt-4">
+                        <button type="submit" className="bg-brand-500 text-white font-bold py-3 px-10 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar</button>
+                      </div>
+                    </div>
+                  </form>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {goals.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma meta. Aponte para as estrelas! ✨</div> : goals.map((g, idx) => {
+                      const pct = Math.min(100, (g.current / g.target) * 100);
+                      return (
+                        <div key={g.id} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
+                          <div>
+                            <div className="flex justify-between items-start mb-4">
+                              <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{g.name}</h3>
+                              <div className="flex gap-2">
+                                <button onClick={()=>setGoalForm(g)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl shadow-sm transition-colors">✏️</button>
+                                <button onClick={()=>handleDeleteGoal(g.id)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors">🗑️</button>
+                              </div>
+                            </div>
+                            <p className="text-xs text-slate-500 font-medium mb-6"><span className="font-black text-slate-800 dark:text-slate-200 text-2xl drop-shadow-sm mr-1">{formatMoney(g.current)}</span> de {formatMoney(g.target)}</p>
+                          </div>
+                          <div>
+                            <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
+                              <div className="h-full bg-gradient-to-r from-brand-400 to-brand-600 transition-all duration-1000 ease-out rounded-full shadow-[0_0_10px_rgba(20,184,166,0.5)]" style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <div className="text-right text-[10px] font-black tracking-widest text-brand-500">{pct.toFixed(1)}% CONCLUÍDO</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'budgets' && (
+                <div className="space-y-6 animate-slide-up">
+                  <form onSubmit={handleSetBudget} className="glass-card p-6 md:p-8 rounded-3xl relative overflow-hidden">
+                    <div className="absolute right-0 top-0 w-64 h-64 bg-amber-500/5 rounded-full blur-3xl pointer-events-none"></div>
+                    <h3 className="font-extrabold text-xl mb-6 relative z-10">Orçamentos Mensais</h3>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end relative z-10">
+                      <div>
+                        <label className={labelClass}>Categoria</label>
+                        <select value={budgetForm.category} onChange={e=>setBudgetForm({...budgetForm, category: e.target.value})} className={inputClass}>{predefinedCategories.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                      </div>
+                      <div>
+                        <label className={labelClass}>Limite (R$)</label>
+                        <input type="number" step="0.01" value={budgetForm.limit} onChange={e=>setBudgetForm({...budgetForm, limit: e.target.value})} className={`${inputClass} ${formErrors.budget.limit ? 'field-error' : ''}`} />
+                        {formErrors.budget.limit && <div className="error-message">⚠️ {formErrors.budget.limit}</div>}
+                      </div>
+                      <button type="submit" className="bg-brand-500 text-white font-bold py-3 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Definir</button>
+                    </div>
+                  </form>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {Object.keys(budgets).length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhum orçamento definido.</div> : Object.entries(budgets).map(([cat, limit], idx) => {
+                      const spent = categoriesTotal[cat]?.val || 0; const pct = Math.min(100, (spent / limit) * 100); const isOver = spent > limit;
+                      return (
+                        <div key={cat} className="glass-card p-6 rounded-3xl flex flex-col justify-between hover:-translate-y-1 hover:shadow-2xl transition-all duration-500 animate-fade-in" style={{ animationDelay: `${idx * 100}ms` }}>
+                          <div>
+                            <div className="flex justify-between items-start mb-4">
+                              <h3 className="font-extrabold text-lg text-slate-800 dark:text-white">{cat}</h3>
+                              <button type="button" onClick={()=>handleDeleteBudget(cat)} className="p-2.5 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl shadow-sm transition-colors">🗑️</button>
+                            </div>
+                            <p className="text-sm font-medium mb-6 text-slate-600 dark:text-slate-300">Gasto: <span className={`font-black text-xl drop-shadow-sm ${isOver?'text-rose-500':''}`}>{formatMoney(spent)}</span> de {formatMoney(limit)}</p>
+                          </div>
+                          <div>
+                            <div className="w-full h-3 bg-slate-200/50 dark:bg-slate-800/80 rounded-full overflow-hidden mb-2 shadow-inner">
+                              <div className={`h-full transition-all duration-1000 ease-out rounded-full ${isOver ? 'bg-rose-500 shadow-[0_0_10px_rgba(244,63,94,0.5)]' : 'bg-brand-500 shadow-[0_0_10px_rgba(20,184,166,0.5)]'}`} style={{ width: `${pct}%` }}></div>
+                            </div>
+                            <div className={`text-right text-[10px] font-black tracking-widest ${isOver ? 'text-rose-500' : 'text-brand-500'}`}>{pct.toFixed(1)}% {isOver ? 'ESTOURADO' : 'UTILIZADO'}</div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {activeTab === 'sync' && (
+                <div className="space-y-6 animate-slide-up max-w-4xl mx-auto">
+                  <BentoCard title="Seu Perfil" icon="👤">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="p-6 bg-slate-100/50 dark:bg-slate-800/30 rounded-3xl border border-slate-200/50 dark:border-slate-700/50">
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-2">Nome</p>
+                        <p className="font-bold text-lg text-slate-800 dark:text-white">{userData?.name}</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-2 mt-4">Email</p>
+                        <p className="font-medium text-slate-700 dark:text-slate-300">{userData?.email}</p>
+                        <p className="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-2 mt-4">Modo</p>
+                        <p className="font-bold text-slate-800 dark:text-white">{isCouple ? '👫 Casal' : '🧍 Solo'}</p>
+                      </div>
+                      <div className="p-6 bg-gradient-to-br from-brand-50 to-partner-50 dark:from-brand-900/20 dark:to-partner-900/20 rounded-3xl border border-brand-200 dark:border-brand-800/50">
+                        <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-2">Status da Nuvem</p>
+                        <p className="font-bold text-lg text-brand-700 dark:text-brand-300 mb-2">✅ Sincronizado</p>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Seus dados estão salvos com segurança no Firebase. Acesse de qualquer dispositivo com seu login.</p>
+                      </div>
+                    </div>
+                  </BentoCard>
+                  
+                  {isCouple && (
+                    <BentoCard title="Configurações do Casal" icon="💑">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="p-6 bg-brand-50 dark:bg-brand-900/20 rounded-3xl border border-brand-200 dark:border-brand-800/50">
+                          <h3 className="font-bold mb-5 text-brand-600 flex items-center gap-2 text-sm uppercase tracking-wider">👤 {settings.nameA}</h3>
+                          <label className={labelClass}>Nome</label>
+                          <input type="text" value={settings.nameA} onChange={e=>setSettings({...settings, nameA: e.target.value})} className={`${inputClass} mb-4 font-bold`} />
+                          <label className={labelClass}>Salário (R$)</label>
+                          <input type="number" step="0.01" value={settings.salaryA} onChange={e=>setSettings({...settings, salaryA: e.target.value})} className={inputClass} />
+                        </div>
+                        <div className="p-6 bg-partner-50 dark:bg-partner-900/20 rounded-3xl border border-partner-200 dark:border-partner-800/50">
+                          <h3 className="font-bold mb-5 text-partner-600 flex items-center gap-2 text-sm uppercase tracking-wider">👤 {settings.nameB}</h3>
+                          <label className={labelClass}>Nome</label>
+                          <input type="text" value={settings.nameB} onChange={e=>setSettings({...settings, nameB: e.target.value})} className={`${inputClass} mb-4 font-bold`} />
+                          <label className={labelClass}>Salário (R$)</label>
+                          <input type="number" step="0.01" value={settings.salaryB} onChange={e=>setSettings({...settings, salaryB: e.target.value})} className={inputClass} />
+                        </div>
+                      </div>
+                      <div className="mt-6 flex justify-end">
+                        <button onClick={handleUpdateCoupleSettings} className="bg-brand-500 text-white font-bold py-3 px-8 rounded-xl shadow-[0_10px_20px_rgba(20,184,166,0.3)] hover:-translate-y-0.5 transition-all">Salvar Configurações</button>
+                      </div>
+                    </BentoCard>
+                  )}
+                  
+                  <BentoCard title="Ações" icon="🔧">
+                    <div className="flex flex-col md:flex-row gap-4">
+                      <button onClick={async () => { await refreshUserData(); showToast('Dados atualizados!'); }} className="flex-1 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold py-3 px-8 rounded-xl shadow-xl hover:-translate-y-0.5 transition-all">
+                        🔄 Atualizar Dados
+                      </button>
+                      <button onClick={signOut} className="flex-1 md:hidden bg-rose-500 text-white font-bold py-3 px-8 rounded-xl shadow-md hover:-translate-y-0.5 transition-all">
+                        🚪 Sair da Conta
+                      </button>
+                    </div>
+                  </BentoCard>
+                </div>
+              )}
+            </div>
+          </main>
+          
+          <div className="fixed bottom-6 right-6 z-[100] flex flex-col gap-3 pointer-events-none" aria-live="polite">
+            {toasts.map(t => (
+              <div key={t.id} className={`px-6 py-4 rounded-2xl shadow-2xl font-bold text-sm bg-white/90 dark:bg-slate-800/90 backdrop-blur-md border-l-4 animate-slide-up flex items-center gap-3 ${t.isError ? 'border-rose-500 text-rose-600 dark:text-rose-400' : 'border-brand-500 text-brand-600 dark:text-brand-400'}`}>
+                <span className="text-xl drop-shadow-sm" aria-hidden="true">{t.isError ? '⚠️' : '✅'}</span>
+                {t.msg}
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+
+    // ==================== APP ROOT ====================
+    function App() {
+      const { user, userData, loading } = useAuth();
+      
+      if (loading) {
+        return (
+          <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 via-slate-800 to-brand-900">
+            <div className="text-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-brand-500 to-partner-500 flex items-center justify-center text-white font-black text-2xl shadow-lg shadow-brand-500/30 animate-pulse">D</div>
+              <p className="text-white font-bold">Carregando...</p>
+            </div>
+          </div>
+        );
+      }
+      
+      if (!user) return <AuthScreen />;
+      if (!userData?.mode) return <OnboardingFlow />;
+      return <DashboardApp />;
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root')); 
+    root.render(
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    );
+  </script>
+</body>
+</html>
