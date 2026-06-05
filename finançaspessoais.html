@@ -2062,26 +2062,48 @@
                   </form>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {subscriptions.length === 0 ? <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma assinatura cadastrada.</div> : subscriptions.map((s, idx) => {
-  const due = calcNextDue(s.dayOfMonth);
-  const today = new Date();
-  const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-  const isPaidThisMonth = s.lastPaidMonth === currentMonth;
-  return (
-                        <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl border-white/60 dark:border-white/10' : 'opacity-50 grayscale border-slate-300 dark:border-slate-700'}`} style={{ animationDelay: `${idx * 100}ms` }}>
-                          <div className="flex justify-between items-start mb-4">
-                            <div>
-                              <h4 className="font-extrabold text-lg flex items-center gap-2 flex-wrap">
-                                {s.desc}
-                                {isCouple && <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>{s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}</span>}
-                              </h4>
-                              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p>
-                            </div>
-                            <div className="flex gap-1">
-                              <button onClick={()=>handleEditSub(s)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl" aria-label="Editar">✏️</button>
-                              <button onClick={()=>handleDeleteSub(s.id)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl" aria-label="Excluir">🗑️</button>
-                            </div>
-                          </div>
+                    {subscriptions.length === 0 ? (
+  <div className="col-span-full glass-card p-12 rounded-3xl text-center text-slate-400 font-medium">Nenhuma assinatura cadastrada.</div>
+) : (
+  subscriptions
+    .sort((a, b) => {
+      const today = new Date();
+      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      const aPaid = a.lastPaidMonth === currentMonth;
+      const bPaid = b.lastPaidMonth === currentMonth;
+      const aDue = calcNextDue(a.dayOfMonth);
+      const bDue = calcNextDue(b.dayOfMonth);
+      
+      // 1º: Inativas vão para o final
+      if (a.active !== b.active) return a.active ? -1 : 1;
+      // 2º: Pagas este mês vão para o final
+      if (aPaid !== bPaid) return aPaid ? 1 : -1;
+      // 3º: Atrasadas vêm primeiro
+      if (aDue.isLate !== bDue.isLate) return aDue.isLate ? -1 : 1;
+      // 4º: Ordena por proximidade (menos dias = primeiro)
+      return aDue.diffDays - bDue.diffDays;
+    })
+    .map((s, idx) => {
+      const due = calcNextDue(s.dayOfMonth);
+      const today = new Date();
+      const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
+      const isPaidThisMonth = s.lastPaidMonth === currentMonth;
+      
+      return (
+        <div key={s.id} className={`glass-card p-6 rounded-3xl transition-all duration-500 animate-fade-in ${s.active ? 'hover:-translate-y-1 hover:shadow-2xl border-white/60 dark:border-white/10' : 'opacity-50 grayscale border-slate-300 dark:border-slate-700'}`} style={{ animationDelay: `${idx * 100}ms` }}>
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <h4 className="font-extrabold text-lg flex items-center gap-2 flex-wrap">
+                {s.desc}
+                {isCouple && <span className={`text-[9px] px-2 py-0.5 rounded-full uppercase font-black tracking-widest ${s.ownerId === user.uid ? 'bg-brand-100 dark:bg-brand-900/50 text-brand-600 dark:text-brand-400' : 'bg-partner-100 dark:bg-partner-900/50 text-partner-600 dark:text-partner-400'}`}>{s.ownerId === user.uid ? 'Minha' : partnerData?.name?.split(' ')[0] || 'Parceiro'}</span>}
+              </h4>
+              <p className="text-[10px] text-slate-500 font-bold uppercase tracking-wider mt-1">{s.category}</p>
+            </div>
+            <div className="flex gap-1">
+              <button onClick={()=>handleEditSub(s)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-white dark:hover:bg-slate-700 rounded-xl" aria-label="Editar">✏️</button>
+              <button onClick={()=>handleDeleteSub(s.id)} className="p-2 bg-white/50 dark:bg-slate-800 hover:bg-rose-100 hover:text-rose-600 dark:hover:bg-rose-900/50 rounded-xl" aria-label="Excluir">🗑️</button>
+            </div>
+          </div>
                           
                           {/* Status de pagamento considerando lastPaidMonth */}
 {s.active && isPaidThisMonth && (
