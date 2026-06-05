@@ -2130,11 +2130,11 @@
                           </div>
                           
                           <div className="space-y-2">
-                            {s.active && due.isLate && (
-                              <button onClick={()=>handleMarkSubAsPaid(s)} className="w-full py-2.5 rounded-xl font-bold text-sm bg-emerald-500 hover:bg-emerald-600 text-white shadow-lg transition-all">
-                                ✓ Marcar como Paga
-                              </button>
-                            )}
+                            {s.active && !isPaidThisMonth && (
+  <button onClick={()=>handleMarkSubAsPaid(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm shadow-lg transition-all ${due.isLate ? 'bg-rose-500 hover:bg-rose-600 text-white' : 'bg-emerald-500 hover:bg-emerald-600 text-white'}`}>
+    {due.isLate ? '⚠️ Marcar como Paga (Atrasada)' : '✓ Marcar como Paga'}
+  </button>
+)}
                             <button onClick={()=>handleToggleSub(s)} className={`w-full py-2.5 rounded-xl font-bold text-sm transition-all ${s.active ? 'bg-slate-100 dark:bg-slate-800/80 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700' : 'bg-brand-500 text-white shadow-lg shadow-brand-500/30'}`}>{s.active ? 'Pausar' : 'Reativar'}</button>
                           </div>
                         </div>
