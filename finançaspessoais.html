@@ -1495,28 +1495,38 @@
       
       // NOVO: Marcar assinatura como paga (gera transação automática)
       const handleMarkSubAsPaid = async (sub) => {
-        if (!window.confirm(`Marcar "${sub.desc}" como paga este mês? Será criada uma transação de ${formatMoney(sub.value)}.`)) return;
-        try {
-          const today = new Date();
-          const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-          const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
-          await DataService.addTransaction({
-            desc: sub.desc,
-            value: parseFloat(sub.value),
-            type: 'expense',
-            category: sub.category || 'Assinaturas',
-            date,
-            ownerId: user.uid,
-            coupleId: sub.coupleId || null,
-            scope: sub.scope || 'private',
-            paidBy: user.uid,
-            autoType: 'subscription_payment',
-            subscriptionId: sub.id,
-          });
-          setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId));
-          showToast("Marcada como paga!");
-        } catch (err) { showToast('Erro', true, err.message); }
-      };
+  if (!window.confirm(`Marcar "${sub.desc}" como paga este mês? Será criada uma transação de ${formatMoney(sub.value)}.`)) return;
+  try {
+    const today = new Date();
+    const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`; // NOVO: identifica o mês atual
+    
+    await DataService.addTransaction({
+      desc: sub.desc,
+      value: parseFloat(sub.value),
+      type: 'expense',
+      category: sub.category || 'Assinaturas',
+      date,
+      ownerId: user.uid,
+      coupleId: sub.coupleId || null,
+      scope: sub.scope || 'private',
+      paidBy: user.uid,
+      autoType: 'subscription_payment',
+      subscriptionId: sub.id,
+    });
+    
+    // NOVO: Marca o mês como pago na assinatura
+    await DataService.updateSubscription(sub.id, { 
+      lastPaidMonth: currentMonth 
+    });
+    
+    // Recarrega transações e assinaturas
+    setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId));
+    setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId));
+    
+    showToast("Marcada como paga!");
+  } catch (err) { showToast('Erro', true, err.message); }
+};
       
       const handleToggleSub = async (sub) => {
         try {
