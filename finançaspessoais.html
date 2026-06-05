@@ -1779,51 +1779,51 @@
                 <div className="space-y-6 animate-slide-up">
                   {isCouple && splitLogic && (
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <BentoCard className="md:col-span-2 bg-gradient-to-br from-slate-900 to-slate-800 dark:from-slate-800 dark:to-slate-900 text-white border-none overflow-hidden relative" title="Acerto de Contas" icon="🤝">
-                        <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
+                      <BentoCard className="md:col-span-2 border-white/60 dark:border-white/5 overflow-hidden relative" title="Acerto de Contas" icon="🤝">
+                        <div className="absolute -right-20 -top-20 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 relative z-10">
-                          <div className="p-4 bg-white/10 rounded-2xl backdrop-blur-sm border border-white/10">
-                            <p className="text-[10px] text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p>
-                            <p className="text-xl font-black">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p>
+                          <div className="p-4 bg-slate-100/80 dark:bg-white/10 rounded-2xl border border-slate-200 dark:border-white/10">
+                            <p className="text-[10px] text-slate-500 dark:text-slate-300 uppercase font-bold tracking-wider mb-1">Renda Total</p>
+                            <p className="text-xl font-black text-slate-800 dark:text-white">{formatMoney((parseFloat(settings.salaryA)||0) + (parseFloat(settings.salaryB)||0))}</p>
                           </div>
-                          <div className="p-4 bg-brand-500/20 rounded-2xl backdrop-blur-sm border border-brand-500/20">
-                            <p className="text-[10px] text-brand-300 uppercase font-bold tracking-wider mb-1">{settings.nameA}</p>
-                            <p className="text-xl font-black text-brand-300">{(splitLogic.ratioA * 100).toFixed(1)}%</p>
+                          <div className="p-4 bg-brand-50 dark:bg-brand-500/20 rounded-2xl border border-brand-100 dark:border-brand-500/20">
+                            <p className="text-[10px] text-brand-600 dark:text-brand-300 uppercase font-bold tracking-wider mb-1">{settings.nameA}</p>
+                            <p className="text-xl font-black text-brand-600 dark:text-brand-300">{(splitLogic.ratioA * 100).toFixed(1)}%</p>
                           </div>
-                          <div className="p-4 bg-partner-500/20 rounded-2xl backdrop-blur-sm border border-partner-500/20">
-                            <p className="text-[10px] text-partner-300 uppercase font-bold tracking-wider mb-1">{settings.nameB}</p>
-                            <p className="text-xl font-black text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p>
+                          <div className="p-4 bg-partner-50 dark:bg-partner-500/20 rounded-2xl border border-partner-100 dark:border-partner-500/20">
+                            <p className="text-[10px] text-partner-600 dark:text-partner-300 uppercase font-bold tracking-wider mb-1">{settings.nameB}</p>
+                            <p className="text-xl font-black text-partner-600 dark:text-partner-300">{(splitLogic.ratioB * 100).toFixed(1)}%</p>
                           </div>
                         </div>
-                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-black/30 rounded-2xl border border-white/5 relative z-10">
+                        <div className="flex flex-col md:flex-row items-center justify-between gap-6 p-6 bg-slate-100/50 dark:bg-black/30 rounded-2xl border border-slate-200 dark:border-white/5 relative z-10">
                           <div>
-                            <p className="text-xs text-slate-400 font-bold uppercase tracking-wider">Gastos Compartilhados</p>
-                            <p className="text-3xl font-black mt-1 drop-shadow-md">{formatMoney(splitLogic.totalSharedExp)}</p>
+                            <p className="text-xs text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">Gastos Compartilhados</p>
+                            <p className="text-3xl font-black mt-1 text-slate-800 dark:text-white drop-shadow-sm">{formatMoney(splitLogic.totalSharedExp)}</p>
                           </div>
                           <div className="text-center md:text-right">
                             {splitLogic.balanceA > 0 ? 
-                              <div className="text-brand-400">
-                                <span className="text-sm font-medium">A receber de {settings.nameB}</span><br/>
-                                <span className="text-3xl font-black drop-shadow-md">{formatMoney(splitLogic.balanceA)}</span>
+                              <div className="text-brand-600 dark:text-brand-400">
+                                <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">A receber de {settings.nameB}</span><br/>
+                                <span className="text-3xl font-black drop-shadow-sm">{formatMoney(splitLogic.balanceA)}</span>
                               </div>
                             : splitLogic.balanceB > 0 ? 
-                              <div className="text-rose-400">
-                                <span className="text-sm font-medium">A pagar para {settings.nameB}</span><br/>
-                                <span className="text-3xl font-black drop-shadow-md">{formatMoney(splitLogic.balanceB)}</span>
+                              <div className="text-rose-600 dark:text-rose-400">
+                                <span className="text-sm font-semibold text-slate-600 dark:text-slate-400">A pagar para {settings.nameB}</span><br/>
+                                <span className="text-3xl font-black drop-shadow-sm">{formatMoney(splitLogic.balanceB)}</span>
                               </div>
-                            : <div className="text-slate-300 text-lg font-bold">Contas saldadas! ✅</div>}
+                            : <div className="text-brand-600 dark:text-slate-300 text-lg font-bold">Contas saldadas! ✅</div>}
                           </div>
                         </div>
                       </BentoCard>
                       <BentoCard title="Resumo" icon="📈">
                         <div className="space-y-4">
-                          <div className="p-5 rounded-2xl bg-brand-50 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50 hover:scale-[1.02] transition-transform">
+                          <div className="p-5 rounded-2xl bg-brand-50/60 dark:bg-brand-900/20 border border-brand-100 dark:border-brand-800/50 hover:scale-[1.02] transition-transform">
                             <p className="text-[10px] text-brand-600 dark:text-brand-400 uppercase font-bold tracking-wider mb-1">Receitas</p>
                             <p className="text-2xl font-black text-brand-700 dark:text-brand-300">{formatMoney(totals.inc)}</p>
                           </div>
-                          <div className="p-5 rounded-2xl bg-rose-50 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 hover:scale-[1.02] transition-transform">
+                          <div className="p-5 rounded-2xl bg-rose-50/60 dark:bg-rose-900/20 border border-rose-100 dark:border-rose-800/50 hover:scale-[1.02] transition-transform">
                             <p className="text-[10px] text-rose-600 dark:text-rose-400 uppercase font-bold tracking-wider mb-1">Despesas</p>
-                            <p className="text-2xl font-black text-rose-700 dark:text-rose-300">{formatMoney(totals.exp)}</p>
+                            <p className="text-2xl font-black text-rose-700 dark:text-brand-300">{formatMoney(totals.exp)}</p>
                           </div>
                         </div>
                       </BentoCard>
