@@ -2228,16 +2228,10 @@
                             const aDue = calcNextDue(Number(a.dayOfMonth));
                             const bDue = calcNextDue(Number(b.dayOfMonth));
                             
-                            // 1º Nível: Inativas/Pausadas
                             if (a.active !== b.active) return a.active ? -1 : 1;
-                            
-                            // 2º Nível: Pagas este mês vão pro final da lista ativa
                             if (aPaid !== bPaid) return aPaid ? 1 : -1;
-                            
-                            // 3º Nível: Atrasadas ganham topo
                             if (aDue.isLate !== bDue.isLate) return aDue.isLate ? -1 : 1;
                             
-                            // 4º Nível: Desempate lógico
                             if (aDue.isLate) {
                               return bDue.daysLate - aDue.daysLate;
                             } else {
@@ -2256,7 +2250,6 @@
                             const isPaidThisMonth = i.lastPaidMonth === currentMonth;
                             const isLate = !isPaidThisMonth && due.isLate;
                             
-                            // Extraído para evitar bug do Babel com crases aninhadas
                             const diasAtrasoTexto = due.daysLate !== 1 ? "dias" : "dia";
                             const diasVenceTexto = due.diffDays !== 1 ? "dias" : "dia";
                             const statusTexto = isLate 
@@ -2366,6 +2359,8 @@
                       </details>
                     )}
                   </div>
+                </div>
+              )}
               
               {/* ===== ABA METAS (com sistema de aportes) ===== */}
               {activeTab === 'goals' && (
