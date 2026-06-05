@@ -1527,31 +1527,6 @@
     showToast('Erro', true, err.message); 
   }
 };
-      desc: sub.desc,
-      value: parseFloat(sub.value),
-      type: 'expense',
-      category: sub.category || 'Assinaturas',
-      date,
-      ownerId: user.uid,
-      coupleId: sub.coupleId || null,
-      scope: sub.scope || 'private',
-      paidBy: user.uid,
-      autoType: 'subscription_payment',
-      subscriptionId: sub.id,
-    });
-    
-    // NOVO: Marca o mês como pago na assinatura
-    await DataService.updateSubscription(sub.id, { 
-      lastPaidMonth: currentMonth 
-    });
-    
-    // Recarrega transações e assinaturas
-    setTransactions(await DataService.getAllTransactions(user.uid, userData.coupleId));
-    setSubscriptions(await DataService.getCollection('subscriptions', user.uid, userData.coupleId));
-    
-    showToast("Marcada como paga!");
-  } catch (err) { showToast('Erro', true, err.message); }
-};
       
       const handleToggleSub = async (sub) => {
         try {
