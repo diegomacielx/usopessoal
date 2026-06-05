@@ -1499,6 +1499,7 @@
         try {
           const today = new Date();
           const date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+          const currentMonth = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}`;
           await DataService.addTransaction({
             desc: sub.desc,
             value: parseFloat(sub.value),
