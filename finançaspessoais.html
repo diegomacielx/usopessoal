@@ -210,16 +210,36 @@
       },
       acceptInviteByCode: async (currentUser, inviteCode) => {
         const allCouples = await db.collection('couples').get();
-        const coupleDoc = allCouples.docs.find(doc => doc.data().inviteCode === inviteCode.toUpperCase() && !doc.data().acceptedAt);
-        if (!coupleDoc) throw new Error('Código inválido, expirado ou já utilizado.');
+        
+        const coupleDoc = allCouples.docs.find(doc => {
+          const data = doc.data();
+          return data.inviteCode === inviteCode.toUpperCase() && !data.acceptedAt;
+        });
+        
+        if (!coupleDoc) {
+          throw new Error('Código inválido, expirado ou já utilizado.');
+        }
         
         const coupleData = coupleDoc.data();
-        if (coupleData.userB !== currentUser.uid) throw new Error('Este código não foi enviado para sua conta.');
         
-        await db.collection('couples').doc(coupleDoc.id).update({ acceptedAt: firebase.firestore.FieldValue.serverTimestamp() });
+        // CORREÇÃO: Validação rigorosa por Email. Resolve contas recriadas e UIDs trocados.
+        if (coupleData.inviteEmail.toLowerCase() !== currentUser.email.toLowerCase()) {
+          throw new Error('Este código foi enviado para outro email. Verifique a conta conectada.');
+        }
+        
+        // Atualiza o convite e injeta o UID mais recente do parceiro no documento
+        await db.collection('couples').doc(coupleDoc.id).update({
+          acceptedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          userB: currentUser.uid 
+        });
+        
+        // Atualiza o perfil do parceiro
         await db.collection('users').doc(currentUser.uid).update({
-          mode: 'couple', coupleId: coupleDoc.id, partnerId: coupleData.userA,
-          'settings.nameInCouple': 'Pessoa B', updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+          mode: 'couple',
+          coupleId: coupleDoc.id,
+          partnerId: coupleData.userA,
+          'settings.nameInCouple': 'Pessoa B',
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp()
         });
         
         return { coupleId: coupleDoc.id, partnerId: coupleData.userA };
