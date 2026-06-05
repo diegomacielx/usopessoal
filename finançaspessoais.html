@@ -1248,6 +1248,43 @@
       const [theme, setTheme] = useState(() => localStorage.getItem('theme') || 'dark');
       const [toasts, setToasts] = useState([]);
       const [showAI, setShowAI] = useState(false);
+      const [isScanning, setIsScanning] = useState(false);
+
+      const handleScanSuccess = useCallback((decodedText) => {
+        setIsScanning(false);
+        try {
+          let value = "";
+          let desc = "Compras (NFC-e)";
+          
+          // Lógica de parser do Padrão Nacional NFC-e
+          // O valor costuma ser o 5º parâmetro separado por '|'
+          const params = decodedText.split('|');
+          if (params.length >= 5) {
+            const possibleValue = parseFloat(params[4]);
+            if (!isNaN(possibleValue) && possibleValue > 0) value = String(possibleValue);
+          } else if (decodedText.includes('vNF=')) {
+            // Variação usada por algumas SEFAZ
+            const match = decodedText.match(/vNF=([\d.]+)/);
+            if (match && match[1]) value = String(parseFloat(match[1]));
+          }
+
+          setTxForm(prev => ({
+            ...prev,
+            desc: desc,
+            value: value,
+            category: 'Casa/Mercado',
+            type: 'expense'
+          }));
+          
+          if (value) {
+            showToast("Nota lida com sucesso! Valor extraído automaticamente.", false, `R$ ${value}`);
+          } else {
+            showToast("QR Code lido com sucesso, mas insira o valor manualmente.", false, "Formato regional não detectou o valor.");
+          }
+        } catch (e) {
+          showToast("Erro ao processar os dados do QR Code.", true);
+        }
+      }, [showToast]);
       
       const [transactions, setTransactions] = useState([]);
       const [goals, setGoals] = useState([]);
